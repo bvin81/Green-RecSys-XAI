@@ -1,68 +1,93 @@
 /**
  * config.js
- * Konfigurációs beállítások az Eco-Score Recept Kutató Rendszerhez
+ * Alkalmazás konfigurációs beállítások
  * Verzió: 2025.06.20
  */
 
 const CONFIG = {
-    // Alkalmazás beállítások
-    VERSION: '2025.06.20',
+    // Alkalmazás alap információk
     APP_NAME: 'Eco-Score Recept Kutató Rendszer',
+    VERSION: '2025.06.20',
     
-    // Adatforrás
-    DATA_SOURCE: './data/recipes_hungarian_best1000.json',
+    // A/B/C teszt csoportok
+    TEST_GROUPS: {
+        'A': 'Kontroll csoport - Nincs pontszám',
+        'B': 'Pontszám csoport - Eco-Score látható', 
+        'C': 'XAI csoport - Eco-Score + magyarázat'
+    },
     
     // Keresési beállítások
     SEARCH: {
-        MAX_RESULTS: 6,              // Maximális megjelenített találatok száma
-        MIN_INGREDIENT_LENGTH: 2,    // Minimális keresési kifejezés hossza
-        INCLUDE_TOP_SUSTAINABLE: true // Hozzáadjon-e legjobb fenntarthatóságú recepteket, ha kevés a találat
+        MAX_RESULTS: 10,
+        MIN_QUERY_LENGTH: 2,
+        CACHE_RESULTS: true,
+        DEBOUNCE_DELAY: 300
     },
     
-    // Tesztcsoportok
-    TEST_GROUPS: {
-        A: 'Kontroll csoport',
-        B: 'Fenntarthatósági pontszámokkal',
-        C: 'Fenntarthatósági pontszámok és XAI magyarázatok'
+    // Recept adatok
+    RECIPES: {
+        DATA_FILE: 'data/recipes.json',
+        FALLBACK_DATA_FILE: 'data/recipes-backup.json'
     },
     
-    // Fenntarthatósági számítások
+    // Fenntarthatósági beállítások
     SUSTAINABILITY: {
-        // Eco-Score súlyozás
-        ENVIRONMENT_WEIGHT: 0.6,     // Környezeti komponens súlya (60%)
-        NUTRITION_WEIGHT: 0.4,       // Táplálkozási komponens súlya (40%)
-        
-        // Kategória módosítók a fenntarthatósági pontszámhoz
-        CATEGORY_MODIFIERS: {
-            'saláta': +5,      // Zöldségek fenntarthatóak
-            'leves': +3,       // Kevés feldolgozás
-            'ital': +2,        // Általában gyümölcsök
-            'reggeli': +1,     // Változó
-            'köret': 0,        // Semleges
-            'egyéb': 0,        // Semleges
-            'főétel': -2,      // Gyakran hús
-            'desszert': -3     // Cukor, feldolgozás
-        },
-        
-        // Környezeti pontszám értékelési kategóriák
-        ENV_SCORE_RANGES: [
-            { max: 20, label: 'Kiváló környezetbarát', color: '#4CAF50' },
-            { max: 40, label: 'Környezetbarát', color: '#8BC34A' },
-            { max: 60, label: 'Közepes környezeti hatás', color: '#FF9800' },
-            { max: 100, label: 'Nagy környezeti terhelés', color: '#F44336' }
+        // Eco-Score tartományok
+        ECO_SCORE_RANGES: [
+            { min: 80, label: 'Kiváló', color: '#22c55e', icon: '🌟' },
+            { min: 60, label: 'Jó', color: '#84cc16', icon: '🌿' },
+            { min: 40, label: 'Közepes', color: '#eab308', icon: '⚠️' },
+            { min: 20, label: 'Gyenge', color: '#f97316', icon: '🔸' },
+            { min: 0, label: 'Rossz', color: '#dc2626', icon: '🔻' }
         ],
         
-        // Fenntarthatósági pontszám értékelési kategóriák
-        ECO_SCORE_RANGES: [
-            { min: 75, label: 'Kiváló fenntartható választás', icon: '🌟' },
-            { min: 60, label: 'Jó fenntartható választás', icon: '✅' },
-            { min: 40, label: 'Közepes fenntarthatóságú választás', icon: '⚖️' },
-            { min: 0, label: 'Kevésbé fenntartható választás', icon: '⚠️' }
+        // Környezeti pontszám tartományok
+        ENV_SCORE_RANGES: [
+            { max: 20, label: 'Kiváló', color: '#22c55e' },
+            { max: 40, label: 'Jó', color: '#84cc16' },
+            { max: 60, label: 'Közepes', color: '#eab308' },
+            { max: 80, label: 'Gyenge', color: '#f97316' },
+            { max: 100, label: 'Rossz', color: '#dc2626' }
+        ],
+        
+        // Kategória módosítók
+        CATEGORY_MODIFIERS: {
+            'saláta': 10,
+            'leves': 5,
+            'főétel': 0,
+            'desszert': -5,
+            'ital': 0,
+            'reggeli': 3,
+            'köret': 2,
+            'egyéb': 0
+        },
+        
+        // Normalizálási konstansok
+        MAX_ENV_SCORE: 100,
+        MAX_NUTRI_SCORE: 100,
+        
+        // Fenntarthatósági súlyok
+        WEIGHTS: {
+            ENV_SCORE: 0.6,
+            NUTRI_SCORE: 0.3,
+            CATEGORY_MODIFIER: 0.1
+        },
+        
+        // Értékelés küszöbök
+        EVALUATION_THRESHOLDS: [
+            { min: 90, label: 'Kivételes', icon: '🌟' },
+            { min: 80, label: 'Kiváló', icon: '✨' },
+            { min: 70, label: 'Nagyon jó', icon: '🌿' },
+            { min: 60, label: 'Jó', icon: '👍' },
+            { min: 50, label: 'Megfelelő', icon: '🆗' },
+            { min: 40, label: 'Közepes', icon: '⚠️' },
+            { min: 30, label: 'Gyenge', icon: '📉' },
+            { min: 0, label: 'Rossz', icon: '⚠️' }
         ]
     },
     
-   // XAI beállítások - VALÓDI API
-  XAI: {
+    // XAI beállítások - VALÓDI API
+    XAI: {
         USE_REAL_API: true,
         
         // ✅ HELYES - környezeti változókból olvas
@@ -74,10 +99,8 @@ const CONFIG = {
         
         // ✅ Fallback beállítások
         FALLBACK_ON_ERROR: true,
-        CACHE_RESULTS: true,
-        
-    }
-    
+        CACHE_RESULTS: true
+    },
     
     // Kategória ikonok
     CATEGORY_ICONS: {
