@@ -26,6 +26,8 @@ export function generateRecipeCard(recipe, index, searchIngredients, testGroup) 
     const showXAI = testGroup === 'C';
     
     const categoryIcon = recipe.categoryIcon || CONFIG.CATEGORY_ICONS['egyéb'];
+    const safeName = (recipe.name || '').replace(/'/g, '');
+    const safeIngredients = (searchIngredients || '').replace(/'/g, '');
     
     return `
         <div class="recipe-card" data-recipe-id="${recipe.recipeid}">
@@ -54,7 +56,7 @@ export function generateRecipeCard(recipe, index, searchIngredients, testGroup) 
             
             <div class="recipe-actions">
                 <button onclick="app.viewRecipeDetails(${recipe.recipeid})" class="btn-secondary">Részletek</button>
-                <button onclick="app.selectRecipe(${recipe.recipeid}, '${recipe.name.replace(/'/g, "\\'")}', ${index + 1}, '${searchIngredients.replace(/'/g, "\\'")}')" class="btn-primary">Ezt választom</button>
+                <button onclick="app.selectRecipe(${recipe.recipeid}, '${safeName}', ${index + 1}, '${safeIngredients}')" class="btn-primary">Ezt választom</button>
             </div>
         </div>
     `;
@@ -242,18 +244,29 @@ function generateXaiHTML(recipe, xaiExplanation) {
                     <li><strong>Végső Eco-Score: ${sustainability.toFixed(1)}/100</strong></li>
                 </ul>
                 
-                <div class="xai-basic-explanation">
-                    ${envScore <= 40 ? 
-                        'Ez a recept viszonylag alacsony környezeti hatással rendelkezik.' : 
-                        'Ez a recept magasabb környezeti hatással jár.'}
-                    ${nutriScore >= 60 ? 
-                        ' Táplálkozási értéke jó.' : 
-                        ' Táplálkozási értéke fejleszthető.'}
+                <div class="xai-summary">
+                    ${xaiExplanation.summary}
                 </div>
                 
-                <div class="xai-loading-error">
-                    <p>A részletes AI magyarázat jelenleg nem érhető el. Kérjük, próbálja újra később.</p>
+                <div class="xai-factors-container">
+                    <div class="xai-factors-column">
+                        <h4>Környezeti tényezők</h4>
+                        ${envFactorsHtml}
+                    </div>
+                    <div class="xai-factors-column">
+                        <h4>Táplálkozási tényezők</h4>
+                        ${nutriFactorsHtml}
+                    </div>
                 </div>
+                
+                ${suggestionsHtml}
+                
+                ${CONFIG.XAI.SHOW_CONFIDENCE ? `
+                <div class="xai-footer">
+                    <span class="xai-model">AI Modell: ${xaiExplanation.model || 'Eco-XAI'}</span>
+                    <span class="xai-confidence">Pontosság: ${Math.round((xaiExplanation.confidence || 0.8) * 100)}%</span>
+                </div>
+                ` : ''}
             </div>
         </div>
     `;
@@ -368,6 +381,8 @@ function generateAlternativesHTML(recipe, similarRecipes, substitutions) {
             const improvementClass = item.sustainabilityImprovement >= 15 ? 'high-improvement' : 
                                      item.sustainabilityImprovement >= 8 ? 'medium-improvement' : 'low-improvement';
             
+            const safeName = (item.recipe.name || '').replace(/'/g, '');
+            
             html += `
                 <div class="similar-recipe-card">
                     <div class="similar-recipe-header">
@@ -385,7 +400,7 @@ function generateAlternativesHTML(recipe, similarRecipes, substitutions) {
                     </div>
                     <div class="similar-recipe-footer">
                         <button onclick="app.viewRecipeDetails(${item.recipe.recipeid})" class="btn-secondary btn-sm">Részletek</button>
-                        <button onclick="app.selectRecipe(${item.recipe.recipeid}, '${item.recipe.name.replace(/'/g, "\\'")}', 0, 'alternatíva')" class="btn-primary btn-sm">Ezt választom</button>
+                        <button onclick="app.selectRecipe(${item.recipe.recipeid}, '${safeName}', 0, 'alternatíva')" class="btn-primary btn-sm">Ezt választom</button>
                     </div>
                 </div>
             `;
@@ -506,6 +521,7 @@ export function generateRecipeDetailsModal(recipe, testGroup) {
     
     const categoryIcon = recipe.categoryIcon || CONFIG.CATEGORY_ICONS['egyéb'];
     const ingredients = formatIngredients(recipe.ingredients);
+    const safeName = (recipe.name || '').replace(/'/g, '');
     
     // Elkészítési utasítások formázása
     let instructions = 'Nincs elérhető utasítás';
@@ -574,7 +590,7 @@ export function generateRecipeDetailsModal(recipe, testGroup) {
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary modal-close-btn">Bezárás</button>
-                <button class="btn-primary" onclick="app.selectRecipe(${recipe.recipeid}, '${recipe.name.replace(/'/g, "\\'")}', 0, 'részletek')">Ezt választom</button>
+                <button class="btn-primary" onclick="app.selectRecipe(${recipe.recipeid}, '${safeName}', 0, 'részletek')">Ezt választom</button>
             </div>
         </div>
     `;
@@ -611,35 +627,6 @@ export function generateSelectionConfirmation(recipe, decisionTime) {
     message += `\n\n✅ A választás sikeresen rögzítve a kutatáshoz!`;
     
     return message;
-}/100</strong></li>
-                </ul>
-                
-                <div class="xai-summary">
-                    ${xaiExplanation.summary}
-                </div>
-                
-                <div class="xai-factors-container">
-                    <div class="xai-factors-column">
-                        <h4>Környezeti tényezők</h4>
-                        ${envFactorsHtml}
-                    </div>
-                    <div class="xai-factors-column">
-                        <h4>Táplálkozási tényezők</h4>
-                        ${nutriFactorsHtml}
-                    </div>
-                </div>
-                
-                ${suggestionsHtml}
-                
-                ${CONFIG.XAI.SHOW_CONFIDENCE ? `
-                <div class="xai-footer">
-                    <span class="xai-model">AI Modell: ${xaiExplanation.model || 'Eco-XAI'}</span>
-                    <span class="xai-confidence">Pontosság: ${Math.round((xaiExplanation.confidence || 0.8) * 100)}%</span>
-                </div>
-                ` : ''}
-            </div>
-        </div>
-    `;
 }
 
 /**
@@ -671,4 +658,22 @@ function generateXaiFallbackHTML(recipe) {
                     <li>Táplálkozási komponens: <strong>${nutritionalComponent.toFixed(1)}</strong> × 40% = ${(nutritionalComponent * 0.4).toFixed(1)}</li>
                     ${categoryModifier !== 0 ? 
                         `<li>Kategória bónusz (${category}): <strong>${categoryModifier > 0 ? '+' : ''}${categoryModifier}</strong></li>` : ''}
-                    <li><strong>Végső Eco-Score: ${sustainability.toFixed(1
+                    <li><strong>Végső Eco-Score: ${sustainability.toFixed(1)}/100</strong></li>
+                </ul>
+                
+                <div class="xai-basic-explanation">
+                    ${envScore <= 40 ? 
+                        'Ez a recept viszonylag alacsony környezeti hatással rendelkezik.' : 
+                        'Ez a recept magasabb környezeti hatással jár.'}
+                    ${nutriScore >= 60 ? 
+                        ' Táplálkozási értéke jó.' : 
+                        ' Táplálkozási értéke fejleszthető.'}
+                </div>
+                
+                <div class="xai-loading-error">
+                    <p>A részletes AI magyarázat jelenleg nem érhető el. Kérjük, próbálja újra később.</p>
+                </div>
+            </div>
+        </div>
+    `;
+}
