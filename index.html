@@ -5,8 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recept Kutatási Rendszer</title>
     <link rel="stylesheet" href="style.css">
+    
+    <!-- GitHub Actions által generált környezeti változók -->
+    <script>
+        // Fallback ha az env-config.js nem töltődik be
+        window.ENV = window.ENV || {};
+        console.log('🔍 Checking for environment variables...');
+    </script>
+    <script src="./env-config.js" onerror="console.warn('⚠️ env-config.js not loaded')"></script>
+    <script>
+        console.log('🔑 Final ENV state:', window.ENV);
+    </script>
 </head>
 <body>
+    <!-- ... rest of the HTML remains the same ... -->
     <div class="container">
         <h1>🍽️ Recept Kutatási Rendszer</h1>
         <p>Segítsen nekünk megérteni, hogyan választják ki az emberek a recepteket!</p>
