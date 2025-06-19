@@ -62,24 +62,20 @@ const CONFIG = {
     },
     
    // XAI beállítások - VALÓDI API
-    XAI: {
-        // Alapbeállítások
-        USE_REAL_API: true,  // ← Kapcsold be a valódi API-t
-        CACHE_RESULTS: true,
-        SHOW_CONFIDENCE: true,
-        SUGGEST_ALTERNATIVES: true,
-        USE_AI_RECOMMENDATIONS: true,
-        USE_AI_SUBSTITUTIONS: true,
+  XAI: {
+        USE_REAL_API: true,
         
-        // OPCIÓ 1: OpenAI GPT-4 (Ajánlott)
-        PROVIDER: 'openai', // 'openai' | 'azure' | 'vertex' | 'custom'
-        OPENAI_API_KEY: 'xxxxxxxxxx', // ← IDE ÍRSZ BE API KULCSOT
-        MODEL_VERSION: 'gpt-4',
-       
-        // Timeout és retry beállítások
-        TIMEOUT_MS: 30000,  // 30 másodperc
-        MAX_RETRIES: 3,
-        FALLBACK_ON_ERROR: true  // Visszaváltás szimulált XAI-ra hiba esetén
+        // ✅ HELYES - környezeti változókból olvas
+        OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || null,
+        
+        // ✅ Alternatív környezeti változó nevek
+        PROVIDER: import.meta.env.VITE_XAI_PROVIDER || 'openai',
+        DEBUG: import.meta.env.VITE_XAI_DEBUG === 'true',
+        
+        // ✅ Fallback beállítások
+        FALLBACK_ON_ERROR: true,
+        CACHE_RESULTS: true,
+        
     }
     
     
