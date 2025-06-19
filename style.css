@@ -1,0 +1,88 @@
+/* 
+ * style.css
+ * Stílusok a Recept Kutatási Rendszerhez
+ * Verzió: 2025.06.20
+ */
+
+/* Általános stílusok */
+:root {
+    --primary-color: #4CAF50;
+    --secondary-color: #2E7D32;
+    --accent-color: #FF9800;
+    --light-color: #F5F5F5;
+    --dark-color: #333333;
+    --gray-color: #757575;
+    --error-color: #F44336;
+    --success-color: #4CAF50;
+    --border-radius: 8px;
+    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+    background-color: #f9f9f9;
+    color: var(--dark-color);
+    padding: 0;
+    margin: 0;
+}
+
+.container {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+h1, h2, h3 {
+    color: var(--dark-color);
+    margin-bottom: 1rem;
+}
+
+h1 {
+    font-size: 2rem;
+    text-align: center;
+    margin-top: 1.5rem;
+    margin-bottom: 1rem;
+}
+
+h2 {
+    font-size: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+h3 {
+    font-size: 1.2rem;
+}
+
+p {
+    margin-bottom: 1rem;
+}
+
+a {
+    color: var(--secondary-color);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}
+
+/* Gombok */
+button, .btn-primary, .btn-secondary {
+    cursor: pointer;
+    padding: 10px 16px;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+    border: none;
+    outline: none;
+}
+
+.btn-primary
