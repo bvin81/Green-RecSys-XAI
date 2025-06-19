@@ -61,16 +61,27 @@ const CONFIG = {
         ]
     },
     
-    // XAI beállítások
+   // XAI beállítások - VALÓDI API
     XAI: {
-        USE_REAL_API: false,  // Valódi API használata (false = szimulált)
-        API_ENDPOINT: 'https://api.example.com/xai/explain',
-        API_KEY: 'demo-key',
-        MODEL_VERSION: 'eco-score-xai-v1',
+        // Alapbeállítások
+        USE_REAL_API: true,  // ← Kapcsold be a valódi API-t
         CACHE_RESULTS: true,
         SHOW_CONFIDENCE: true,
-        SUGGEST_ALTERNATIVES: true
-    },
+        SUGGEST_ALTERNATIVES: true,
+        USE_AI_RECOMMENDATIONS: true,
+        USE_AI_SUBSTITUTIONS: true,
+        
+        // OPCIÓ 1: OpenAI GPT-4 (Ajánlott)
+        PROVIDER: 'openai', // 'openai' | 'azure' | 'vertex' | 'custom'
+        OPENAI_API_KEY: 'sk-...ExEA', // ← IDE ÍRSZ BE API KULCSOT
+        MODEL_VERSION: 'gpt-4',
+       
+        // Timeout és retry beállítások
+        TIMEOUT_MS: 30000,  // 30 másodperc
+        MAX_RETRIES: 3,
+        FALLBACK_ON_ERROR: true  // Visszaváltás szimulált XAI-ra hiba esetén
+    }
+    
     
     // Kategória ikonok
     CATEGORY_ICONS: {
