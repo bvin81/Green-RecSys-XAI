@@ -73,7 +73,7 @@ const CONFIG = {
         
         // OPCIÓ 1: OpenAI GPT-4 (Ajánlott)
         PROVIDER: 'openai', // 'openai' | 'azure' | 'vertex' | 'custom'
-        OPENAI_API_KEY: 'sk-...ExEA', // ← IDE ÍRSZ BE API KULCSOT
+        OPENAI_API_KEY: 'xxxxxxxxxx', // ← IDE ÍRSZ BE API KULCSOT
         MODEL_VERSION: 'gpt-4',
        
         // Timeout és retry beállítások
