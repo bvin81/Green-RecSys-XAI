@@ -11,7 +11,9 @@ import {
     checkExistingUser, 
     registerUser, 
     recordUserChoice,
-    getTestGroupDescription
+    getTestGroupDescription,
+    loginUser,
+    exportUserData
 } from './modules/user-manager.js';
 import { 
     generateSearchResults, 
@@ -35,9 +37,13 @@ class EcoScoreRecipeApp {
         this.testGroup = null;
         this.searchStartTime = null;
         this.currentRecipeDetails = null;
+        this.abortController = new AbortController();
         
-        // Alkalmazás inicializálása
-        this.initializeApp();
+        // Alkalmazás inicializálása async módon
+        this.initializeApp().catch(error => {
+            console.error('❌ Alkalmazás inicializálási hiba:', error);
+            this.showError('Az alkalmazás indítása sikertelen. Kérjük, töltse újra az oldalt.');
+        });
     }
     
     /**
@@ -73,7 +79,7 @@ class EcoScoreRecipeApp {
             console.log(`📊 Betöltött receptek: ${this.recipes.length}`);
         } catch (error) {
             console.error('❌ Alkalmazás inicializálási hiba:', error);
-            alert('Az alkalmazás indítása sikertelen. Kérjük, töltse újra az oldalt.');
+            this.showError('Az alkalmazás indítása sikertelen. Kérjük, töltse újra az oldalt.');
         }
     }
     
@@ -81,143 +87,202 @@ class EcoScoreRecipeApp {
      * Event listenerek beállítása
      */
     setupEventListeners() {
-        // Regisztrációs űrlap
+        const signal = this.abortController.signal;
+        
+        // Regisztrációs form
         const registrationForm = document.getElementById('registration-form');
         if (registrationForm) {
-            registrationForm.addEventListener('submit', (event) => {
-                event.preventDefault();
-                this.handleRegistration();
-            });
+            registrationForm.addEventListener('submit', this.handleRegistration.bind(this), { signal });
         }
         
         // Keresés gomb
         const searchBtn = document.getElementById('search-btn');
         if (searchBtn) {
-            searchBtn.addEventListener('click', () => this.handleSearch());
+            searchBtn.addEventListener('click', this.handleSearch.bind(this), { signal });
         }
         
-        // Keresési mező Enter esemény
+        // Keresési input - Enter billentyű
         const searchInput = document.getElementById('ingredient-search');
         if (searchInput) {
-            searchInput.addEventListener('keypress', (event) => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
+            searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
                     this.handleSearch();
                 }
-            });
+            }, { signal });
         }
+        
+        // Globális click handler
+        document.addEventListener('click', this.handleClick.bind(this), { signal });
         
         // Új keresés gomb
         const newSearchBtn = document.getElementById('new-search-btn');
         if (newSearchBtn) {
-            newSearchBtn.addEventListener('click', () => this.showSection('search-section'));
+            newSearchBtn.addEventListener('click', this.startNewSearch.bind(this), { signal });
         }
         
         // Statisztikák gomb
         const viewStatsBtn = document.getElementById('view-stats-btn');
         if (viewStatsBtn) {
-            viewStatsBtn.addEventListener('click', () => {
-                this.showUserStats();
-                this.showSection('stats-section');
-            });
+            viewStatsBtn.addEventListener('click', this.showStats.bind(this), { signal });
         }
         
-        // Vissza gomb a statisztikáknál
+        // Vissza a kereséshez gomb
         const backToSearchBtn = document.getElementById('back-to-search-btn');
         if (backToSearchBtn) {
-            backToSearchBtn.addEventListener('click', () => this.showSection('search-section'));
+            backToSearchBtn.addEventListener('click', this.backToSearch.bind(this), { signal });
         }
         
-        // Globális klikk esemény a modális ablakokhoz
-        document.addEventListener('click', (event) => {
-            // Modális ablak bezárása a háttérre kattintva
-            if (event.target.matches('.modal-backdrop')) {
-                this.closeModal();
-            }
-            
-            // Modális ablak bezárása a bezárás gombra kattintva
-            if (event.target.matches('.modal-close') || event.target.matches('.modal-close-btn')) {
-                this.closeModal();
-            }
-        });
+        // Adatok exportálása gomb
+        const exportDataBtn = document.getElementById('export-data-btn');
+        if (exportDataBtn) {
+            exportDataBtn.addEventListener('click', this.exportData.bind(this), { signal });
+        }
         
         console.log('✅ Event listenerek beállítva');
+    }
+    
+    /**
+     * Globális click handler
+     * 
+     * @param {Event} event - Click esemény
+     */
+    handleClick(event) {
+        const target = event.target;
+        
+        // Recept kiválasztás
+        if (target.classList.contains('select-recipe-btn')) {
+            event.preventDefault();
+            const recipeId = target.dataset.recipeId;
+            const recipeName = target.dataset.recipeName;
+            const rank = parseInt(target.dataset.rank);
+            const searchIngredients = target.dataset.searchIngredients;
+            this.selectRecipe(recipeId, recipeName, rank, searchIngredients, 'search');
+        }
+        
+        // Recept részletek
+        if (target.classList.contains('recipe-details-btn')) {
+            event.preventDefault();
+            const recipeId = target.dataset.recipeId;
+            this.showRecipeDetails(recipeId);
+        }
+        
+        // Modal bezárás
+        if (target.classList.contains('modal-close') || target.classList.contains('modal-backdrop')) {
+            event.preventDefault();
+            this.closeModal();
+        }
+        
+        // Recept kiválasztás modal-ból
+        if (target.classList.contains('select-from-modal-btn')) {
+            event.preventDefault();
+            const recipeId = target.dataset.recipeId;
+            const recipeName = target.dataset.recipeName;
+            const searchIngredients = target.dataset.searchIngredients;
+            this.selectRecipe(recipeId, recipeName, 0, searchIngredients, 'details');
+        }
+        
+        // Alternatív javaslatok
+        if (target.classList.contains('btn-alternative-suggestions')) {
+            event.preventDefault();
+            const recipeId = target.dataset.recipeId;
+            this.showAlternatives(recipeId);
+        }
+    }
+    
+    /**
+     * Regisztráció kezelése
+     * 
+     * @param {Event} event - Submit esemény
+     */
+    handleRegistration(event) {
+        event.preventDefault();
+        
+        const formData = new FormData(event.target);
+        const email = formData.get('email');
+        
+        try {
+            this.currentUser = registerUser(email);
+            this.testGroup = this.currentUser.testGroup;
+            
+            // Felhasználói interfész frissítése
+            this.updateUserInterface();
+            
+            // Keresési szakaszra váltás
+            this.showSection('search-section');
+            
+        } catch (error) {
+            console.error('❌ Regisztrációs hiba:', error);
+            this.showError('Regisztráció sikertelen: ' + error.message);
+        }
     }
     
     /**
      * Meglévő felhasználó ellenőrzése
      */
     checkExistingUser() {
-        this.currentUser = checkExistingUser();
+        const existingUser = checkExistingUser();
         
-        if (this.currentUser) {
+        if (existingUser) {
+            this.currentUser = loginUser(existingUser);
             this.testGroup = this.currentUser.testGroup;
+            
+            // Felhasználói interfész frissítése
+            this.updateUserInterface();
+            
+            // Keresési szakaszra váltás
             this.showSection('search-section');
-            this.updateUserDisplay();
         } else {
+            // Regisztrációs szakasz megjelenítése
             this.showSection('registration-section');
         }
     }
     
     /**
-     * Regisztráció kezelése
+     * Felhasználói interfész frissítése
      */
-    handleRegistration() {
-        try {
-            const emailInput = document.getElementById('email');
-            if (!emailInput) {
-                throw new Error('Email mező nem található');
-            }
-            
-            const email = emailInput.value.trim();
-            if (!email || !email.includes('@')) {
-                alert('Kérjük, adjon meg egy érvényes email címet!');
-                return;
-            }
-            
-            // Felhasználó regisztrálása
-            this.currentUser = registerUser(email);
-            this.testGroup = this.currentUser.testGroup;
-            
-            // UI átváltás
-            this.showSection('search-section');
-            this.updateUserDisplay();
-            
-        } catch (error) {
-            console.error('❌ Regisztrációs hiba:', error);
-            alert('Regisztrációs hiba történt. Kérjük, próbálja újra!');
+    updateUserInterface() {
+        // Felhasználói információk megjelenítése
+        const userInfoContainer = document.querySelector('.user-info');
+        if (userInfoContainer && this.currentUser) {
+            userInfoContainer.innerHTML = generateUserInfo(this.currentUser);
         }
+        
+        console.log(`👤 Felhasználó: ${this.currentUser.email} (${this.currentUser.testGroup} csoport)`);
     }
     
     /**
-     * Felhasználói adatok megjelenítése
+     * Szakasz megjelenítése
+     * 
+     * @param {string} sectionId - Megjelenítendő szakasz ID
      */
-    updateUserDisplay() {
-        try {
-            const userInfoContainer = document.querySelector('.user-info');
-            if (userInfoContainer) {
-                userInfoContainer.innerHTML = generateUserInfo(this.currentUser);
-            }
-        } catch (error) {
-            console.error('❌ Felhasználói adatok megjelenítési hiba:', error);
+    showSection(sectionId) {
+        // Összes szakasz elrejtése
+        const sections = document.querySelectorAll('.section');
+        sections.forEach(section => section.classList.add('hidden'));
+        
+        // Kiválasztott szakasz megjelenítése
+        const targetSection = document.getElementById(sectionId);
+        if (targetSection) {
+            targetSection.classList.remove('hidden');
         }
+        
+        console.log(`🔄 Szakasz váltás: ${sectionId}`);
     }
     
     /**
      * Keresés kezelése
      */
     handleSearch() {
+        const searchInput = document.getElementById('ingredient-search');
+        const ingredients = searchInput?.value?.trim();
+        
+        if (!ingredients) {
+            this.showError('Kérjük, adjon meg legalább egy hozzávalót!');
+            return;
+        }
+        
         try {
-            const searchInput = document.getElementById('ingredient-search');
-            if (!searchInput) {
-                throw new Error('Keresési mező nem található');
-            }
-            
-            const ingredients = searchInput.value.trim();
-            if (!ingredients) {
-                alert('Kérjük, adjon meg legalább egy hozzávalót!');
-                return;
-            }
+            console.log('🔍 Keresés indítása:', ingredients);
             
             // Keresési idő mérés kezdése
             this.searchStartTime = Date.now();
@@ -230,7 +295,7 @@ class EcoScoreRecipeApp {
             
         } catch (error) {
             console.error('❌ Keresési hiba:', error);
-            alert('Keresési hiba történt. Kérjük, próbálja újra!');
+            this.showError('Keresési hiba történt. Kérjük, próbálja újra!');
         }
     }
     
@@ -251,7 +316,7 @@ class EcoScoreRecipeApp {
         resultsDiv.innerHTML = generateSearchResults(recipes, searchIngredients, this.testGroup);
         
         // Ha C csoport, akkor töltsük be az XAI magyarázatokat
-        if (this.testGroup === 'C') {
+        if (this.testGroup === 'C' && recipes.length > 0) {
             // Késleltetett betöltés, hogy a kártyák már megjelenjenek
             setTimeout(() => {
                 recipes.forEach(async (recipe) => {
@@ -259,6 +324,8 @@ class EcoScoreRecipeApp {
                 });
             }, 100);
         }
+        
+        console.log(`📋 ${recipes.length} recept megjelenítve`);
     }
     
     /**
@@ -292,6 +359,9 @@ class EcoScoreRecipeApp {
                 source
             );
             
+            // Modal bezárása ha nyitva van
+            this.closeModal();
+            
             // Köszönőoldal megjelenítése
             this.showSection('thank-you-section');
             
@@ -299,7 +369,7 @@ class EcoScoreRecipeApp {
             
         } catch (error) {
             console.error('❌ Recept kiválasztási hiba:', error);
-            alert('Hiba történt a recept kiválasztása során.');
+            this.showError('Hiba történt a recept kiválasztása során.');
         }
     }
     
@@ -325,8 +395,11 @@ class EcoScoreRecipeApp {
             modalContainer.innerHTML = generateRecipeDetailsModal(recipe, this.testGroup);
             modalContainer.classList.add('active');
             
+            console.log('📖 Recept részletek megjelenítve:', recipe.name);
+            
         } catch (error) {
             console.error('❌ Recept részletek megjelenítési hiba:', error);
+            this.showError('Hiba történt a recept részletek betöltése során.');
         }
     }
     
@@ -340,6 +413,48 @@ class EcoScoreRecipeApp {
             modalContainer.innerHTML = '';
         }
         this.currentRecipeDetails = null;
+        console.log('❌ Modal bezárva');
+    }
+    
+    /**
+     * Új keresés indítása
+     */
+    startNewSearch() {
+        // Keresési mező tisztítása
+        const searchInput = document.getElementById('ingredient-search');
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+        
+        // Eredmények törlése
+        const resultsDiv = document.getElementById('search-results');
+        if (resultsDiv) {
+            resultsDiv.innerHTML = '';
+        }
+        
+        // Keresési szakasz megjelenítése
+        this.showSection('search-section');
+        
+        // Időmérés visszaállítása
+        this.searchStartTime = null;
+        
+        console.log('🔄 Új keresés indítva');
+    }
+    
+    /**
+     * Statisztikák megjelenítése
+     */
+    showStats() {
+        this.showSection('stats-section');
+        this.showUserStats();
+    }
+    
+    /**
+     * Vissza a kereséshez
+     */
+    backToSearch() {
+        this.showSection('search-section');
     }
     
     /**
@@ -378,21 +493,15 @@ class EcoScoreRecipeApp {
                     <div class="category-stats">
             `;
             
-            Object.entries(stats.categoryCounts)
-                .sort((a, b) => b[1] - a[1])
-                .forEach(([category, count]) => {
-                    const icon = CONFIG.CATEGORY_ICONS[category] || CONFIG.CATEGORY_ICONS['egyéb'];
-                    const percent = Math.round(count / stats.totalChoices * 100);
-                    
-                    html += `
-                        <div class="category-stat-item">
-                            <div class="category-icon">${icon}</div>
-                            <div class="category-name">${category}</div>
-                            <div class="category-count">${count}x</div>
-                            <div class="category-percent">${percent}%</div>
-                        </div>
-                    `;
-                });
+            for (const [category, count] of Object.entries(stats.categoryCounts)) {
+                const percentage = ((count / stats.totalChoices) * 100).toFixed(1);
+                html += `
+                    <div class="category-stat-item">
+                        <span class="category-name">${CONFIG.CATEGORY_ICONS[category] || '🍴'} ${category}</span>
+                        <span class="category-count">${count} (${percentage}%)</span>
+                    </div>
+                `;
+            }
             
             html += `
                     </div>
@@ -400,62 +509,108 @@ class EcoScoreRecipeApp {
             `;
         }
         
-        // Teszt csoport információ
-        html += `
-            <div class="stats-group-info">
-                <p>Ön a következő tesztcsoportban van: <strong>${this.testGroup} (${getTestGroupDescription(this.testGroup)})</strong></p>
-                <p>Ez a csoport ${this.testGroup === 'A' ? 'nem lát' : this.testGroup === 'B' ? 'lát' : 'lát részletes'} fenntarthatósági információkat.</p>
-            </div>
-        `;
-        
-        // Frissítés
+        html += `</div>`;
         statsContainer.innerHTML = html;
+        
+        console.log('📊 Statisztikák megjelenítve');
     }
     
     /**
-     * Szekció megjelenítése
-     * 
-     * @param {string} sectionId - Szekció azonosító
+     * Adatok exportálása
      */
-    showSection(sectionId) {
-        try {
-            // Minden szakasz elrejtése
-            document.querySelectorAll('.section').forEach(section => {
-                section.classList.add('hidden');
-            });
-            
-            // Cél szakasz megjelenítése
-            const targetSection = document.getElementById(sectionId);
-            if (targetSection) {
-                targetSection.classList.remove('hidden');
-                console.log('📄 Szakasz váltás:', sectionId);
-            } else {
-                console.error('❌ Szakasz nem található:', sectionId);
-            }
-        } catch (error) {
-            console.error('❌ Szakasz megjelenítési hiba:', error);
+    exportData() {
+        if (!this.currentUser) {
+            this.showError('Nincs bejelentkezett felhasználó!');
+            return;
         }
+        
+        try {
+            const exportData = exportUserData(this.currentUser.id);
+            if (!exportData) {
+                throw new Error('Adatok exportálása sikertelen');
+            }
+            
+            // JSON fájl letöltése
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `eco-score-data-${this.currentUser.id}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            
+            console.log('✅ Adatok exportálva');
+            this.showSuccess('Adatok sikeresen exportálva!');
+            
+        } catch (error) {
+            console.error('❌ Export hiba:', error);
+            this.showError('Hiba történt az adatok exportálása során.');
+        }
+    }
+    
+    /**
+     * Alternatívák megjelenítése
+     * 
+     * @param {number} recipeId - Recept azonosító
+     */
+    showAlternatives(recipeId) {
+        // Ez a funkció a ui-components.js-ben van implementálva
+        const recipe = this.recipes.find(r => r.recipeid == recipeId);
+        if (recipe) {
+            console.log('🔄 Alternatívák megjelenítése:', recipe.name);
+            // A showAlternatives funkció meghívása a ui-components modulból
+        }
+    }
+    
+    /**
+     * Hiba üzenet megjelenítése
+     * 
+     * @param {string} message - Hiba üzenet
+     */
+    showError(message) {
+        alert('❌ ' + message);
+        console.error('❌ UI Hiba:', message);
+    }
+    
+    /**
+     * Siker üzenet megjelenítése
+     * 
+     * @param {string} message - Siker üzenet
+     */
+    showSuccess(message) {
+        // Egyszerű alert, de későbbi fejlesztésben toast notification
+        alert('✅ ' + message);
+        console.log('✅ UI Siker:', message);
+    }
+    
+    /**
+     * Alkalmazás takarítása (memory leak prevention)
+     */
+    destroy() {
+        this.abortController.abort();
+        this.recipes = null;
+        this.currentUser = null;
+        this.currentRecipeDetails = null;
+        console.log('🧹 Alkalmazás megtakarítva');
     }
 }
 
-// Alkalmazás globális példánya
-let app;
-
-// Alkalmazás indítása a DOM betöltése után
+// Alkalmazás indítása amikor a DOM betöltődött
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        console.log(`🌟 ${CONFIG.APP_NAME} indítása...`);
-        
-        // Kis késleltetés, hogy biztosan betöltődjön a window.ENV
-        setTimeout(() => {
-            app = new EcoScoreRecipeApp();
-            
-            // Globális elérhetőség a window objektumon keresztül
-            window.app = app;
-        }, 100);
-        
-    } catch (error) {
-        console.error('❌ Alkalmazás indítási hiba:', error);
-        alert('Az alkalmazás indítása sikertelen. Kérjük, töltse újra az oldalt.');
+    console.log('🌐 DOM betöltve, alkalmazás indítása...');
+    window.app = new EcoScoreRecipeApp();
+});
+
+// Takarítás az oldal elhagyásakor
+window.addEventListener('beforeunload', () => {
+    if (window.app && typeof window.app.destroy === 'function') {
+        window.app.destroy();
     }
 });
+
+// Export az alkalmazás osztálynak fejlesztéshez
+export default EcoScoreRecipeApp;
