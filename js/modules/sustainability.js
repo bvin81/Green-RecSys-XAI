@@ -11,9 +11,13 @@ import { SimpleDecisionTree, extractFeaturesFromIngredients, encodeCategoryFeatu
 const sustainabilityModel = new SimpleDecisionTree();
 sustainabilityModel.train();
 
-// Fenntarthatósági pontszám számítása AI modell használatával
+/**
+ * Fenntarthatósági pontszám számítása AI modell használatával
+ * @param {Object} recipe - Recept objektum
+ * @returns {number} Fenntarthatósági pontszám (0-100)
+ */
 export function calculateSustainabilityScore(recipe) {
-    // Ha nincsenek alapadatok, használjuk a régi módszert
+    // Ha nincsenek alapadatok, használjuk a legacy módszert
     if (!recipe.ingredients || !recipe.category) {
         return calculateSustainabilityScoreLegacy(recipe);
     }
@@ -33,6 +37,38 @@ export function calculateSustainabilityScore(recipe) {
     const environmentalComponent = Math.max(0, 100 - envScore);
     const nutritionalComponent = Math.min(100, nutriScore);
     
+    const sustainabilityScore = 
+        (environmentalComponent * CONFIG.SUSTAINABILITY.ENVIRONMENT_WEIGHT) + 
+        (nutritionalComponent * CONFIG.SUSTAINABILITY.NUTRITION_WEIGHT);
+    
+    // Kategória bónusz/malus
+    const categoryModifier = getCategoryModifier(recipe.category);
+    
+    // Végső pontszám (0-100 közé korlátozva)
+    return Math.max(0, Math.min(100, sustainabilityScore + categoryModifier));
+}
+
+/**
+ * Legacy fenntarthatósági pontszám számítása (fallback)
+ * @param {Object} recipe - Recept objektum
+ * @returns {number} Fenntarthatósági pontszám (0-100)
+ */
+export function calculateSustainabilityScoreLegacy(recipe) {
+    const envScore = recipe.env_score || 0;
+    const nutriScore = recipe.nutri_score || 0;
+    
+    // Ha valamelyik 0, akkor nem számítható
+    if (envScore <= 0 || nutriScore <= 0) {
+        return 0;
+    }
+    
+    // Környezeti komponens (fordított, mert alacsony env_score = jobb)
+    const environmentalComponent = Math.max(0, 100 - envScore);
+    
+    // Táplálkozási komponens
+    const nutritionalComponent = Math.min(100, nutriScore);
+    
+    // Súlyozott átlag a konfigurációban megadott súlyokkal
     const sustainabilityScore = 
         (environmentalComponent * CONFIG.SUSTAINABILITY.ENVIRONMENT_WEIGHT) + 
         (nutritionalComponent * CONFIG.SUSTAINABILITY.NUTRITION_WEIGHT);
@@ -71,39 +107,6 @@ export function normalizeEnvScore(rawScore) {
 export function normalizeNutriScore(nutriScore) {
     if (nutriScore <= 0) return 0;
     return Math.min(100, nutriScore);
-}
-
-/**
- * Fenntarthatósági pontszám számítása
- * 
- * @param {Object} recipe - Recept objektum
- * @returns {number} Fenntarthatósági pontszám (0-100)
- */
-export function calculateSustainabilityScore(recipe) {
-    const envScore = recipe.env_score || 0;
-    const nutriScore = recipe.nutri_score || 0;
-    
-    // Ha valamelyik 0, akkor nem számítható
-    if (envScore <= 0 || nutriScore <= 0) {
-        return 0;
-    }
-    
-    // Környezeti komponens (fordított, mert alacsony env_score = jobb)
-    const environmentalComponent = Math.max(0, 100 - envScore);
-    
-    // Táplálkozási komponens
-    const nutritionalComponent = Math.min(100, nutriScore);
-    
-    // Súlyozott átlag a konfigurációban megadott súlyokkal
-    const sustainabilityScore = 
-        (environmentalComponent * CONFIG.SUSTAINABILITY.ENVIRONMENT_WEIGHT) + 
-        (nutritionalComponent * CONFIG.SUSTAINABILITY.NUTRITION_WEIGHT);
-    
-    // Kategória bónusz/malus
-    const categoryModifier = getCategoryModifier(recipe.category);
-    
-    // Végső pontszám (0-100 közé korlátozva)
-    return Math.max(0, Math.min(100, sustainabilityScore + categoryModifier));
 }
 
 /**
@@ -176,32 +179,42 @@ export function evaluateSustainabilityScore(score) {
 }
 
 /**
- * Recept kategóriájának meghatározása
+ * Kategória meghatározása hozzávalók alapján
  * 
  * @param {Object} recipe - Recept objektum
- * @returns {string} Meghatározott kategória
+ * @returns {string} Kategória név
  */
 export function determineCategory(recipe) {
-    const name = (recipe.name || '').toLowerCase();
-    const ingredients = (recipe.ingredients || '').toLowerCase();
-    const text = name + ' ' + ingredients;
+    if (!recipe.ingredients) return 'egyéb';
     
-    // Kategória szabályok (magyar nyelvre optimalizálva)
-    const categoryRules = {
-        'leves': ['leves', 'húslé', 'alaplé', 'soup', 'broth'],
-        'saláta': ['saláta', 'salad', 'uborka', 'lettuce', 'vegyes'],
-        'főétel': ['csirke', 'chicken', 'marhahús', 'beef', 'hal', 'fish', 'sertéshús', 'pork', 'tészta', 'pasta', 'rizs', 'rice', 'steak', 'schnitzel'],
-        'desszert': ['cukor', 'sugar', 'méz', 'honey', 'csokoládé', 'chocolate', 'sütemény', 'cake', 'torta', 'keksz'],
-        'ital': ['smoothie', 'juice', 'tea', 'coffee', 'ital', 'shake', 'koktél'],
-        'reggeli': ['tojás', 'egg', 'omlett', 'pancake', 'müzli', 'cereal', 'zabkása', 'pirítós'],
-        'köret': ['burgonya', 'potato', 'sárgarépa', 'carrot', 'brokkoli', 'spárga', 'zöldség köret']
-    };
+    const ingredients = recipe.ingredients.toLowerCase();
     
-    // Keresés a szövegben kategória kulcsszavak alapján
-    for (const [category, keywords] of Object.entries(categoryRules)) {
-        if (keywords.some(keyword => text.includes(keyword))) {
-            return category;
-        }
+    // Főétel kategóriák
+    if (ingredients.includes('hús') || ingredients.includes('csirke') || 
+        ingredients.includes('sertés') || ingredients.includes('marha')) {
+        return 'főétel';
+    }
+    
+    // Leves kategória
+    if (ingredients.includes('leves') || ingredients.includes('húsleves')) {
+        return 'leves';
+    }
+    
+    // Saláta kategória
+    if (ingredients.includes('saláta') || ingredients.includes('uborka')) {
+        return 'saláta';
+    }
+    
+    // Desszert kategória
+    if (ingredients.includes('cukor') || ingredients.includes('csokoládé') || 
+        ingredients.includes('torta') || ingredients.includes('sütemény')) {
+        return 'desszert';
+    }
+    
+    // Ital kategória
+    if (ingredients.includes('tej') || ingredients.includes('ital') || 
+        ingredients.includes('smoothie')) {
+        return 'ital';
     }
     
     return 'egyéb';
@@ -210,8 +223,8 @@ export function determineCategory(recipe) {
 /**
  * Kategória ikon lekérése
  * 
- * @param {string} category - Kategória
- * @returns {string} Kategória ikon
+ * @param {string} category - Kategória név
+ * @returns {string} Emoji ikon
  */
 export function getCategoryIcon(category) {
     return CONFIG.CATEGORY_ICONS[category] || CONFIG.CATEGORY_ICONS['egyéb'];
