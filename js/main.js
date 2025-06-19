@@ -52,6 +52,13 @@ class EcoScoreRecipeApp {
                 CONFIG.XAI.init();
             }
             
+            // ✅ DEBUG: CONFIG állapot ellenőrzése
+            console.log('🔧 CONFIG állapot:', {
+                DATA_SOURCE: CONFIG.DATA_SOURCE,
+                hasDataSource: !!CONFIG.DATA_SOURCE,
+                configKeys: Object.keys(CONFIG)
+            });
+            
             // Adatok betöltése
             const rawData = await loadRecipeData();
             this.recipes = prepareRecipes(rawData);
