@@ -5,6 +5,44 @@
  */
 
 import CONFIG from './config.js';
+import { SimpleDecisionTree, extractFeaturesFromIngredients, encodeCategoryFeatures } from './ai-model.js';
+
+// Globális modell példány
+const sustainabilityModel = new SimpleDecisionTree();
+sustainabilityModel.train();
+
+// Fenntarthatósági pontszám számítása AI modell használatával
+export function calculateSustainabilityScore(recipe) {
+    // Ha nincsenek alapadatok, használjuk a régi módszert
+    if (!recipe.ingredients || !recipe.category) {
+        return calculateSustainabilityScoreLegacy(recipe);
+    }
+    
+    // Jellemzők kinyerése
+    const ingredientFeatures = extractFeaturesFromIngredients(recipe.ingredients);
+    const categoryFeatures = encodeCategoryFeatures(recipe.category);
+    
+    // Összes jellemző egyesítése
+    const features = { ...ingredientFeatures, ...categoryFeatures };
+    
+    // Modell előrejelzése
+    const envScore = sustainabilityModel.predictEnvScore(features);
+    const nutriScore = sustainabilityModel.predictNutriScore(features);
+    
+    // Súlyozott átlag a konfigurációban megadott súlyokkal
+    const environmentalComponent = Math.max(0, 100 - envScore);
+    const nutritionalComponent = Math.min(100, nutriScore);
+    
+    const sustainabilityScore = 
+        (environmentalComponent * CONFIG.SUSTAINABILITY.ENVIRONMENT_WEIGHT) + 
+        (nutritionalComponent * CONFIG.SUSTAINABILITY.NUTRITION_WEIGHT);
+    
+    // Kategória bónusz/malus
+    const categoryModifier = getCategoryModifier(recipe.category);
+    
+    // Végső pontszám (0-100 közé korlátozva)
+    return Math.max(0, Math.min(100, sustainabilityScore + categoryModifier));
+}
 
 /**
  * Normalizált környezeti pontszám számítása
