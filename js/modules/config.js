@@ -9,6 +9,9 @@ const CONFIG = {
     APP_NAME: 'Eco-Score Recept Kutató Rendszer',
     VERSION: '2025.06.20',
     
+    // Adatforrás
+    DATA_SOURCE: './data/recipes_hungarian_best1000.json',
+    
     // A/B/C teszt csoportok
     TEST_GROUPS: {
         'A': 'Kontroll csoport - Nincs pontszám',
@@ -22,12 +25,6 @@ const CONFIG = {
         MIN_QUERY_LENGTH: 2,
         CACHE_RESULTS: true,
         DEBOUNCE_DELAY: 300
-    },
-    
-    // Recept adatok
-    RECIPES: {
-        DATA_FILE: 'data/recipes.json',
-        FALLBACK_DATA_FILE: 'data/recipes-backup.json'
     },
     
     // Fenntarthatósági beállítások
