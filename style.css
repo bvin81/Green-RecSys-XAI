@@ -1,91 +1,18 @@
-/* 
- * style.css
- * Stílusok a Recept Kutatási Rendszerhez
- * Verzió: 2025.06.20
- */
-
-/* Általános stílusok */
-:root {
-    --primary-color: #4CAF50;
-    --secondary-color: #2E7D32;
-    --accent-color: #FF9800;
-    --light-color: #F5F5F5;
-    --dark-color: #333333;
-    --gray-color: #757575;
-    --error-color: #F44336;
-    --success-color: #4CAF50;
-    --border-radius: 8px;
-    --shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+/* Alapvető szakasz elrejtés */
+.section {
+    display: block;
+    width: 100%;
 }
 
-* {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
+.section.hidden {
+    display: none !important;
 }
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    line-height: 1.6;
-    background-color: #f9f9f9;
-    color: var(--dark-color);
-    padding: 0;
-    margin: 0;
+/* Alternatív megoldás, ha a fenti nem működik */
+.hidden {
+    display: none !important;
+    visibility: hidden !important;
 }
-
-.container {
-    max-width: 1000px;
-    margin: 0 auto;
-    padding: 20px;
-}
-
-h1, h2, h3 {
-    color: var(--dark-color);
-    margin-bottom: 1rem;
-}
-
-h1 {
-    font-size: 2rem;
-    text-align: center;
-    margin-top: 1.5rem;
-    margin-bottom: 1rem;
-}
-
-h2 {
-    font-size: 1.5rem;
-    margin-top: 1.5rem;
-}
-
-h3 {
-    font-size: 1.2rem;
-}
-
-p {
-    margin-bottom: 1rem;
-}
-
-a {
-    color: var(--secondary-color);
-    text-decoration: none;
-}
-
-a:hover {
-    text-decoration: underline;
-}
-
-/* Gombok */
-button, .btn-primary, .btn-secondary {
-    cursor: pointer;
-    padding: 10px 16px;
-    border-radius: var(--border-radius);
-    font-weight: 500;
-    font-size: 1rem;
-    transition: all 0.3s ease;
-    border: none;
-    outline: none;
-}
-
-.btn-primary
 
 /* Modális ablak stílusok */
 .modal-container {
@@ -150,4 +77,172 @@ button, .btn-primary, .btn-secondary {
     display: flex;
     gap: 10px;
     justify-content: flex-end;
+}
+
+/* Receptkártya stílusok */
+.recipe-card {
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 15px;
+    margin: 10px 0;
+    background: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.recipe-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.rank-badge {
+    background: #007bff;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.recipe-ingredients {
+    margin: 10px 0;
+    color: #666;
+}
+
+.recipe-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.btn-primary, .btn-secondary {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s;
+}
+
+.btn-primary {
+    background: #007bff;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #0056b3;
+}
+
+.btn-secondary {
+    background: #6c757d;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #545b62;
+}
+
+/* Eco-Score szekció */
+.eco-score-section {
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 10px;
+    margin: 10px 0;
+}
+
+.eco-score-container {
+    display: flex;
+    gap: 15px;
+    justify-content: space-around;
+    margin: 10px 0;
+}
+
+.eco-score-item {
+    text-align: center;
+}
+
+.eco-score-value {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.eco-score-label {
+    font-size: 12px;
+    color: #666;
+}
+
+/* Betöltő animáció */
+.loading-spinner {
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #007bff;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+    margin: 0 auto;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Form stílusok */
+.form-group {
+    margin: 15px 0;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+.form-group input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* Keresési konténer */
+.search-container {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+}
+
+.search-container input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+/* Felhasználói info */
+.user-info {
+    background: #e9ecef;
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 15px;
+    text-align: right;
+}
+
+/* Általános konténer */
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+/* Footer */
+footer {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+    border-top: 1px solid #eee;
+    margin-top: 40px;
 }
