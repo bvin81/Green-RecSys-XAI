@@ -90,12 +90,25 @@ const CONFIG = {
     XAI: {
         USE_REAL_API: true,
         
-        // ✅ HELYES - környezeti változókból olvas
-        OPENAI_API_KEY: import.meta.env.VITE_OPENAI_API_KEY || null,
+        // ✅ HELYES - GitHub Actions környezeti változókból olvas
+        get OPENAI_API_KEY() {
+            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_OPENAI_API_KEY) 
+                ? window.ENV.VITE_OPENAI_API_KEY 
+                : null;
+        },
         
         // ✅ Alternatív környezeti változó nevek
-        PROVIDER: import.meta.env.VITE_XAI_PROVIDER || 'openai',
-        DEBUG: import.meta.env.VITE_XAI_DEBUG === 'true',
+        get PROVIDER() {
+            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_XAI_PROVIDER) 
+                ? window.ENV.VITE_XAI_PROVIDER 
+                : 'openai';
+        },
+        
+        get DEBUG() {
+            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_XAI_DEBUG) 
+                ? window.ENV.VITE_XAI_DEBUG === 'true' 
+                : false;
+        },
         
         // ✅ Fallback beállítások
         FALLBACK_ON_ERROR: true,
