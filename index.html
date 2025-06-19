@@ -6,22 +6,28 @@
     <title>Recept Kutatási Rendszer</title>
     <link rel="stylesheet" href="style.css">
     
-    <!-- GitHub Actions által generált környezeti változók -->
+    <!-- GitHub Actions környezeti változók biztonsági betöltése -->
     <script>
-        // Fallback ha az env-config.js nem töltődik be
+        // Biztosítjuk, hogy a window.ENV létezik még az env-config.js betöltése előtt
         window.ENV = window.ENV || {};
         console.log('🔍 Checking for environment variables...');
     </script>
-    <script src="./env-config.js" onerror="console.warn('⚠️ env-config.js not loaded')"></script>
+    
+    <!-- Env config betöltése szinkron módon -->
+    <script src="./env-config.js" onerror="console.warn('⚠️ env-config.js not loaded, using defaults')"></script>
+    
+    <!-- Ellenőrzés hogy betöltődött-e -->
     <script>
         console.log('🔑 Final ENV state:', window.ENV);
+        console.log('🔑 API Key available:', !!(window.ENV && window.ENV.VITE_OPENAI_API_KEY));
     </script>
 </head>
 <body>
-    <!-- ... rest of the HTML remains the same ... -->
     <div class="container">
-        <h1>🍽️ Recept Kutatási Rendszer</h1>
-        <p>Segítsen nekünk megérteni, hogyan választják ki az emberek a recepteket!</p>
+        <header>
+            <h1>🍽️ Recept Kutatási Rendszer</h1>
+            <p>Segítsen nekünk megérteni, hogyan választják ki az emberek a recepteket!</p>
+        </header>
         
         <!-- Regisztrációs szakasz -->
         <div id="registration-section" class="section">
@@ -29,7 +35,8 @@
             <form id="registration-form">
                 <div class="form-group">
                     <label for="email">Email cím:</label>
-                    <input type="email" id="email" required>
+                    <input type="email" id="email" required 
+                           placeholder="pelda@email.com">
                 </div>
                 <button type="submit" class="btn-primary">🚀 Kezdés</button>
             </form>
@@ -44,7 +51,8 @@
             <h2>🔍 Recept Keresés</h2>
             <div class="search-container">
                 <input type="text" id="ingredient-search" 
-                       placeholder="Milyen hozzávalókkal szeretne főzni? (pl: csirke, rizs)">
+                       placeholder="Milyen hozzávalókkal szeretne főzni? (pl: csirke, rizs)"
+                       autocomplete="off">
                 <button id="search-btn" class="btn-primary">Keresés</button>
             </div>
             
@@ -57,8 +65,10 @@
         <div id="thank-you-section" class="section hidden">
             <h2>🎉 Köszönjük!</h2>
             <p>A választását rögzítettük. Szeretne újabb keresést végezni?</p>
-            <button id="new-search-btn" class="btn-secondary">Új Keresés</button>
-            <button id="view-stats-btn" class="btn-secondary">Statisztikák megtekintése</button>
+            <div class="thank-you-actions">
+                <button id="new-search-btn" class="btn-primary">Új Keresés</button>
+                <button id="view-stats-btn" class="btn-secondary">Statisztikák megtekintése</button>
+            </div>
         </div>
         
         <!-- Statisztikák szakasz -->
@@ -67,7 +77,10 @@
             <div id="user-stats">
                 <!-- Statisztikák helye -->
             </div>
-            <button id="back-to-search-btn" class="btn-secondary">Vissza a kereséshez</button>
+            <div class="stats-actions">
+                <button id="back-to-search-btn" class="btn-secondary">Vissza a kereséshez</button>
+                <button id="export-data-btn" class="btn-secondary">Adatok exportálása</button>
+            </div>
         </div>
     </div>
     
@@ -76,8 +89,17 @@
         <!-- Modális tartalom ide kerül dinamikusan -->
     </div>
     
+    <!-- Betöltési indikátor -->
+    <div id="loading-overlay" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <p>Betöltés...</p>
+    </div>
+    
     <footer>
-        <p>Recept Kutatási Rendszer © 2025 - Verzió: 2025.06.20</p>
+        <div class="footer-content">
+            <p>Recept Kutatási Rendszer © 2025 - Verzió: 2025.06.20</p>
+            <p>Kutatási célú alkalmazás - Az adatok anonimizálva kerülnek tárolásra</p>
+        </div>
     </footer>
     
     <!-- Moduláris JavaScript betöltése -->
