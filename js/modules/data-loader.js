@@ -16,8 +16,17 @@ import { safeJsonParse } from '../utils/helpers.js';
 export async function loadRecipeData() {
     console.log('📋 Recept adatok betöltése...');
     
+    // ✅ Adatforrás ellenőrzése és fallback
+    let dataSource = CONFIG.DATA_SOURCE;
+    if (!dataSource) {
+        console.warn('⚠️ CONFIG.DATA_SOURCE üres, alapértelmezett használata');
+        dataSource = './data/recipes_hungarian_best1000.json';
+    }
+    
+    console.log('📁 Adatforrás URL:', dataSource);
+    
     try {
-        const response = await fetch(CONFIG.DATA_SOURCE);
+        const response = await fetch(dataSource);
         
         if (response.ok) {
             const recipes = await response.json();
@@ -39,7 +48,7 @@ export async function loadRecipeData() {
  * @returns {Array} Alapértelmezett receptek
  */
 function loadFallbackData() {
-    // Egyszerű fallback adatok teszt célra
+    // Bővebb fallback adatok teszteléshez
     return [
         {
             recipeid: 1,
@@ -67,6 +76,33 @@ function loadFallbackData() {
             env_score: 15.2,
             nutri_score: 72.8,
             sustainability_index: 85
+        },
+        {
+            recipeid: 4,
+            name: "Spenótos lasagne",
+            ingredients: "lasagne tészta, spenót, ricotta, mozzarella, paradicsom",
+            category: "főétel",
+            env_score: 42.1,
+            nutri_score: 55.8,
+            sustainability_index: 62
+        },
+        {
+            recipeid: 5,
+            name: "Gyümölcssaláta",
+            ingredients: "alma, banán, narancs, szőlő, méz, citromlé",
+            category: "desszert",
+            env_score: 18.7,
+            nutri_score: 85.3,
+            sustainability_index: 88
+        },
+        {
+            recipeid: 6,
+            name: "Zöldségleves",
+            ingredients: "sárgarépa, zeller, burgonya, hagyma, petrezselyem",
+            category: "leves",
+            env_score: 20.4,
+            nutri_score: 76.9,
+            sustainability_index: 82
         }
     ];
 }
@@ -86,13 +122,13 @@ export function prepareRecipes(recipes) {
     let recalculatedCount = 0;
     
     recipes.forEach((recipe, index) => {
-        // 1. ÉRVÉNYES RECEPTEK SZŰRÉSE (0 értékek kiszűrése)
+        // 1. ÉRVÉNYES RECEPTEK SZŰRÉSE
         const envScore = recipe.env_score || 0;
         const nutriScore = recipe.nutri_score || 0;
         
-        // Ha valamelyik pontszám 0 vagy hiányzik, kihagyjuk
-        if (envScore <= 0 || nutriScore <= 0) {
-            console.log(`❌ Recept kihagyva (0 pontszám): ${recipe.name || 'Névtelen'} - env:${envScore}, nutri:${nutriScore}`);
+        // Lazábbak vagyunk a szűréssel - csak ha mindkettő 0
+        if (envScore <= 0 && nutriScore <= 0) {
+            console.log(`❌ Recept kihagyva (mindkét pontszám 0): ${recipe.name || 'Névtelen'}`);
             return; // Kihagyjuk ezt a receptet
         }
         
