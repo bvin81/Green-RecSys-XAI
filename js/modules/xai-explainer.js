@@ -5,13 +5,8 @@
  */
 
 import CONFIG from './config.js';
-
-// API konfiguráció
-const XAI_CONFIG = {
-    API_ENDPOINT: CONFIG.XAI.API_ENDPOINT,
-    API_KEY: CONFIG.XAI.API_KEY,
-    MODEL: CONFIG.XAI.MODEL_VERSION
-};
+import { getIngredientSustainabilityImpact } from './sustainability.js';
+import { retry } from '../utils/helpers.js';
 
 /**
  * Recept adatok előkészítése a magyarázathoz
@@ -68,7 +63,7 @@ export async function getExplanation(recipe) {
         // API hívás konfigurációtól függően
         let xaiExplanation;
         
-        if (CONFIG.XAI.USE_REAL_API) {
+        if (CONFIG.XAI?.USE_REAL_API && CONFIG.XAI?.OPENAI_API_KEY) {
             // Valódi API hívás
             xaiExplanation = await callExternalXaiApi(recipeData);
         } else {
@@ -91,487 +86,623 @@ export async function getExplanation(recipe) {
  * @returns {Promise<Object>} API válasz
  */
 async function callExternalXaiApi(recipeData) {
-    const response = await fetch(XAI_CONFIG.API_ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${XAI_CONFIG.API_KEY}`
-        },
-        body: JSON.stringify({
-            model: XAI_CONFIG.MODEL,
-            data: recipeData
-        })
-    });
-    
-    if (!response.ok) {
-        throw new Error(`XAI API hívás sikertelen: ${response.status}`);
+    const apiKey = CONFIG.XAI?.OPENAI_API_KEY;
+    if (!apiKey) {
+        throw new Error('Hiányzó OpenAI API kulcs');
     }
     
-    return await response.json();
+    const prompt = generateApiPrompt(recipeData);
+    
+    const requestBody = {
+        model: CONFIG.XAI?.MODEL_VERSION || 'gpt-3.5-turbo',
+        messages: [
+            {
+                role: 'system',
+                content: 'Te egy fenntarthatósági szakértő vagy, aki magyarázza a receptek környezeti hatását.'
+            },
+            {
+                role: 'user', 
+                content: prompt
+            }
+        ],
+        max_tokens: 800,
+        temperature: 0.7
+    };
+    
+    return await retry(async () => {
+        const response = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+            throw new Error(`OpenAI API hiba: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return parseApiResponse(data.choices[0]?.message?.content, recipeData);
+    }, 3, 1000);
 }
 
 /**
- * Szimulált XAI API válasz generálása
+ * API prompt generálása
  * 
- * @param {Object} recipeData - Előkészített recept adatok
+ * @param {Object} recipeData - Recept adatok
+ * @returns {string} API prompt
+ */
+function generateApiPrompt(recipeData) {
+    return `
+Elemezd ezt a receptet fenntarthatósági szempontból:
+
+Recept: ${recipeData.name}
+Hozzávalók: ${recipeData.ingredients.join(', ')}
+Kategória: ${recipeData.category}
+Környezeti pontszám: ${recipeData.envScore} (0-100, magasabb = rosszabb)
+Táplálkozási pontszám: ${recipeData.nutriScore} (0-100, magasabb = jobb)
+Fenntarthatósági index: ${recipeData.sustainabilityIndex} (0-100, magasabb = jobb)
+
+Kérlek, adj egy strukturált magyarázatot a következő formátumban:
+
+ÖSSZEFOGLALÓ: [1-2 mondatos magyarázat]
+
+KÖRNYEZETI TÉNYEZŐK:
+- [Tényező neve]: [pozitív/negatív/semleges] - [magyarázat]
+
+TÁPLÁLKOZÁSI TÉNYEZŐK:
+- [Tényező neve]: [pozitív/negatív/semleges] - [magyarázat]
+
+JAVASLATOK:
+- [Javaslat 1]
+- [Javaslat 2]
+`;
+}
+
+/**
+ * API válasz feldolgozása
+ * 
+ * @param {string} response - API válasz szöveg
+ * @param {Object} recipeData - Recept adatok
+ * @returns {Object} Strukturált magyarázat
+ */
+function parseApiResponse(response, recipeData) {
+    try {
+        const lines = response.split('\n').map(line => line.trim()).filter(line => line);
+        
+        let summary = '';
+        const environmentalFactors = [];
+        const nutritionalFactors = [];
+        const suggestions = [];
+        
+        let currentSection = null;
+        
+        lines.forEach(line => {
+            if (line.startsWith('ÖSSZEFOGLALÓ:')) {
+                summary = line.replace('ÖSSZEFOGLALÓ:', '').trim();
+                currentSection = 'summary';
+            } else if (line.startsWith('KÖRNYEZETI TÉNYEZŐK:')) {
+                currentSection = 'environmental';
+            } else if (line.startsWith('TÁPLÁLKOZÁSI TÉNYEZŐK:')) {
+                currentSection = 'nutritional';
+            } else if (line.startsWith('JAVASLATOK:')) {
+                currentSection = 'suggestions';
+            } else if (line.startsWith('-') || line.startsWith('•')) {
+                const content = line.replace(/^[-•]\s*/, '');
+                
+                if (currentSection === 'environmental') {
+                    environmentalFactors.push(parseFactorLine(content));
+                } else if (currentSection === 'nutritional') {
+                    nutritionalFactors.push(parseFactorLine(content));
+                } else if (currentSection === 'suggestions') {
+                    suggestions.push(content);
+                }
+            } else if (currentSection === 'summary' && !summary) {
+                summary = line;
+            }
+        });
+        
+        return {
+            summary: summary || generateDefaultSummary(recipeData),
+            environmentalFactors: environmentalFactors.length > 0 ? environmentalFactors : generateDefaultEnvironmentalFactors(recipeData),
+            nutritionalFactors: nutritionalFactors.length > 0 ? nutritionalFactors : generateDefaultNutritionalFactors(recipeData),
+            suggestions: suggestions.length > 0 ? suggestions : generateDefaultSuggestions(recipeData),
+            confidence: 0.85,
+            source: 'openai'
+        };
+        
+    } catch (error) {
+        console.error('❌ API válasz feldolgozási hiba:', error);
+        return generateFallbackExplanation({ 
+            ...recipeData, 
+            ingredients: recipeData.ingredients.join(', ') 
+        });
+    }
+}
+
+/**
+ * Tényező sor feldolgozása
+ * 
+ * @param {string} line - Tényező sor
+ * @returns {Object} Tényező objektum
+ */
+function parseFactorLine(line) {
+    const parts = line.split(':');
+    if (parts.length < 2) {
+        return {
+            name: line,
+            impact: 'neutral',
+            explanation: '',
+            importance: 0.5
+        };
+    }
+    
+    const name = parts[0].trim();
+    const rest = parts[1].trim();
+    
+    let impact = 'neutral';
+    if (rest.includes('pozitív') || rest.includes('jó')) {
+        impact = 'positive';
+    } else if (rest.includes('negatív') || rest.includes('rossz')) {
+        impact = 'negative';
+    }
+    
+    return {
+        name,
+        impact,
+        explanation: rest.replace(/(pozitív|negatív|semleges)\s*-?\s*/i, ''),
+        importance: Math.random() * 0.4 + 0.6 // 0.6-1.0 között
+    };
+}
+
+/**
+ * Szimulált XAI API válasz
+ * 
+ * @param {Object} recipeData - Recept adatok
  * @returns {Promise<Object>} Szimulált válasz
  */
 async function simulateXaiApi(recipeData) {
-    // LIME/SHAP-szerű magyarázatok szimulálása
+    // Késleltetés szimulációhoz
+    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
     
-    // Környezeti tényezők elemzése
-    const environmentalFactors = [];
+    const environmentalFactors = generateDefaultEnvironmentalFactors(recipeData);
+    const nutritionalFactors = generateDefaultNutritionalFactors(recipeData);
+    const suggestions = generateDefaultSuggestions(recipeData);
+    const summary = generateDefaultSummary(recipeData);
     
-    // Hús jelenlétének ellenőrzése
-    const meatIngredients = ['csirke', 'marha', 'sertés', 'hal', 'hús', 'kolbász'];
-    const hasMeat = recipeData.ingredients.some(ing => 
-        meatIngredients.some(meat => ing.includes(meat))
-    );
-    
-    if (hasMeat) {
-        environmentalFactors.push({
-            name: 'állati eredetű összetevők',
-            impact: 'negatív',
-            importance: 0.65,
-            explanation: 'Az állati eredetű összetevők általában magasabb környezeti terhelést jelentenek a nagyobb erőforrásigény miatt.'
-        });
-    } else {
-        environmentalFactors.push({
-            name: 'növényi alapú összetétel',
-            impact: 'pozitív',
-            importance: 0.58,
-            explanation: 'A növényi alapú ételek általában kisebb környezeti terhelést jelentenek az alacsonyabb erőforrásigény miatt.'
-        });
-    }
-    
-    // Feldolgozottság ellenőrzése
-    const processedIndicators = ['konzerv', 'feldolgozott', 'instant', 'előkészített'];
-    const hasProcessed = recipeData.ingredients.some(ing => 
-        processedIndicators.some(proc => ing.includes(proc))
-    );
-    
-    if (hasProcessed) {
-        environmentalFactors.push({
-            name: 'feldolgozott összetevők',
-            impact: 'negatív',
-            importance: 0.42,
-            explanation: 'A feldolgozott élelmiszerek gyártása általában több energiát és erőforrást igényel.'
-        });
-    }
-    
-    // Szezonális összetevők ellenőrzése
-    const seasonalIngredients = ['szezonális', 'helyi', 'friss'];
-    const hasSeasonal = recipeData.ingredients.some(ing => 
-        seasonalIngredients.some(seas => ing.includes(seas))
-    );
-    
-    if (hasSeasonal) {
-        environmentalFactors.push({
-            name: 'szezonális összetevők',
-            impact: 'pozitív',
-            importance: 0.38,
-            explanation: 'A szezonális és helyi összetevők általában kisebb szállítási igényt jelentenek.'
-        });
-    }
-    
-    // Kategória hatás
-    const categoryImpact = {
-        'saláta': { impact: 'pozitív', importance: 0.35, explanation: 'A saláták általában nagy arányban tartalmaznak növényi összetevőket.' },
-        'leves': { impact: 'pozitív', importance: 0.30, explanation: 'A levesek általában hatékonyan használják fel az összetevőket és sok vizet tartalmaznak.' },
-        'főétel': { impact: 'negatív', importance: 0.25, explanation: 'A főételek gyakran tartalmaznak húst vagy más állati eredetű összetevőket.' },
-        'desszert': { impact: 'negatív', importance: 0.40, explanation: 'A desszertek gyakran magas feldolgozottsági szintűek és sok cukrot tartalmaznak.' }
-    };
-    
-    if (categoryImpact[recipeData.category]) {
-        environmentalFactors.push({
-            name: `${recipeData.category} kategória`,
-            impact: categoryImpact[recipeData.category].impact,
-            importance: categoryImpact[recipeData.category].importance,
-            explanation: categoryImpact[recipeData.category].explanation
-        });
-    }
-    
-    // Táplálkozási tényezők elemzése
-    const nutritionalFactors = [];
-    
-    // Egészséges összetevők ellenőrzése
-    const healthyIngredients = ['zöldség', 'gyümölcs', 'teljes kiőrlésű', 'hal', 'hüvelyes'];
-    const hasHealthy = recipeData.ingredients.some(ing => 
-        healthyIngredients.some(healthy => ing.includes(healthy))
-    );
-    
-    if (hasHealthy) {
-        nutritionalFactors.push({
-            name: 'egészséges összetevők',
-            impact: 'pozitív',
-            importance: 0.55,
-            explanation: 'A recept tartalmaz tápanyagban gazdag, egészséges összetevőket.'
-        });
-    }
-    
-    // Magas cukortartalom ellenőrzése
-    const sugarIndicators = ['cukor', 'méz', 'szirup'];
-    const hasHighSugar = recipeData.ingredients.some(ing => 
-        sugarIndicators.some(sugar => ing.includes(sugar))
-    );
-    
-    if (hasHighSugar) {
-        nutritionalFactors.push({
-            name: 'magas cukortartalom',
-            impact: 'negatív',
-            importance: 0.48,
-            explanation: 'A magas cukortartalom csökkenti a táplálkozási értéket és növeli a kalóriatartalmat.'
-        });
-    }
-    
-    // Fehérjetartalom ellenőrzése
-    const proteinSources = ['hús', 'hal', 'tojás', 'tej', 'sajt', 'bab', 'lencse', 'tofu'];
-    const hasProtein = recipeData.ingredients.some(ing => 
-        proteinSources.some(protein => ing.includes(protein))
-    );
-    
-    if (hasProtein) {
-        nutritionalFactors.push({
-            name: 'fehérjeforrások',
-            impact: 'pozitív',
-            importance: 0.42,
-            explanation: 'A recept jó fehérjeforrásokat tartalmaz, amelyek esszenciálisak a szervezet számára.'
-        });
-    }
-    
-    // Zsírtartalom ellenőrzése
-    const fatSources = ['olaj', 'vaj', 'zsír', 'szalonna', 'tejszín'];
-    const hasFat = recipeData.ingredients.some(ing => 
-        fatSources.some(fat => ing.includes(fat))
-    );
-    
-    if (hasFat) {
-        nutritionalFactors.push({
-            name: 'zsírtartalom',
-            impact: 'semleges',
-            importance: 0.35,
-            explanation: 'A recept tartalmaz zsírforrásokat, amelyek mértékkel fogyasztva részei az egészséges étrendnek.'
-        });
-    }
-    
-    // Összetettség ellenőrzése (sok összetevő = változatosabb tápanyagok)
-    if (recipeData.ingredients.length > 8) {
-        nutritionalFactors.push({
-            name: 'összetevők változatossága',
-            impact: 'pozitív',
-            importance: 0.25,
-            explanation: 'A változatos összetevők többféle tápanyagot biztosítanak.'
-        });
-    }
-    
-    // Összefoglaló generálása
-    const environmentalImpactSum = environmentalFactors.reduce((sum, factor) => 
-        sum + (factor.impact === 'pozitív' ? 1 : factor.impact === 'negatív' ? -1 : 0) * factor.importance, 0);
-    
-    const nutritionalImpactSum = nutritionalFactors.reduce((sum, factor) => 
-        sum + (factor.impact === 'pozitív' ? 1 : factor.impact === 'negatív' ? -1 : 0) * factor.importance, 0);
-    
-    let summary = '';
-    
-    if (environmentalImpactSum > 0 && nutritionalImpactSum > 0) {
-        summary = 'A recept környezeti és táplálkozási szempontból is kedvező értékelést kapott.';
-    } else if (environmentalImpactSum > 0) {
-        summary = 'A recept környezeti szempontból kedvező, de táplálkozási értéke fejleszthető.';
-    } else if (nutritionalImpactSum > 0) {
-        summary = 'A recept táplálkozási értéke jó, de környezeti hatása fejleszthető.';
-    } else {
-        summary = 'A recept mind környezeti, mind táplálkozási szempontból fejleszthető.';
-    }
-    
-    // Javaslatok
-    const suggestions = [];
-    
-    if (environmentalImpactSum < 0) {
-        if (hasMeat) {
-            suggestions.push('Próbálja csökkenteni az állati eredetű összetevők mennyiségét vagy helyettesítse növényi alternatívákkal.');
-        }
-        if (hasProcessed) {
-            suggestions.push('Használjon friss, feldolgozatlan összetevőket a feldolgozott termékek helyett.');
-        }
-    }
-    
-    if (nutritionalImpactSum < 0) {
-        if (hasHighSugar) {
-            suggestions.push('Csökkentse a hozzáadott cukor mennyiségét vagy használjon természetes édesítőket.');
-        }
-        if (!hasHealthy) {
-            suggestions.push('Adjon több zöldséget vagy gyümölcsöt a recepthez a tápanyagtartalom növeléséhez.');
-        }
-    }
-    
-    // Szimulált késleltetés (500ms)
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Végleges magyarázat összeállítása
     return {
-        success: true,
-        environmentalFactors: environmentalFactors.sort((a, b) => b.importance - a.importance),
-        nutritionalFactors: nutritionalFactors.sort((a, b) => b.importance - a.importance),
-        suggestions: suggestions,
-        summary: summary,
-        model: 'XAI-LIME-Simulator-v1',
-        confidence: 0.82
+        summary,
+        environmentalFactors,
+        nutritionalFactors,
+        suggestions,
+        confidence: 0.75,
+        source: 'simulated'
     };
 }
 
 /**
- * Fallback magyarázat generálása hiba esetére
+ * Alapértelmezett környezeti tényezők generálása
+ * 
+ * @param {Object} recipeData - Recept adatok
+ * @returns {Array} Környezeti tényezők
+ */
+function generateDefaultEnvironmentalFactors(recipeData) {
+    const factors = [];
+    
+    recipeData.ingredients.forEach(ingredient => {
+        const impact = getIngredientSustainabilityImpact(ingredient);
+        factors.push({
+            name: ingredient,
+            impact: impact.impact === 'positive' ? 'pozitív' : 
+                   impact.impact === 'negative' ? 'negatív' : 'semleges',
+            explanation: impact.explanation,
+            importance: Math.abs(impact.score) / 10
+        });
+    });
+    
+    // Kategória hatás
+    const categoryImpact = getCategoryEnvironmentalImpact(recipeData.category);
+    factors.push(categoryImpact);
+    
+    return factors.slice(0, 5); // Maximum 5 tényező
+}
+
+/**
+ * Alapértelmezett táplálkozási tényezők generálása
+ * 
+ * @param {Object} recipeData - Recept adatok
+ * @returns {Array} Táplálkozási tényezők
+ */
+function generateDefaultNutritionalFactors(recipeData) {
+    const factors = [];
+    
+    // Táplálkozási pontszám alapján
+    if (recipeData.nutriScore > 70) {
+        factors.push({
+            name: 'Magas tápérték',
+            impact: 'pozitív',
+            explanation: 'Ez a recept gazdag vitaminokban és ásványi anyagokban.',
+            importance: 0.9
+        });
+    } else if (recipeData.nutriScore < 40) {
+        factors.push({
+            name: 'Alacsony tápérték',
+            impact: 'negatív', 
+            explanation: 'A recept táplálkozási értéke javítható lenne.',
+            importance: 0.8
+        });
+    }
+    
+    // Összetevők alapú elemzés
+    const veggieCount = recipeData.ingredients.filter(ing => 
+        ['saláta', 'paradicsom', 'uborka', 'spenót', 'brokkoli', 'sárgarépa'].some(veg => 
+            ing.includes(veg)
+        )
+    ).length;
+    
+    if (veggieCount > 2) {
+        factors.push({
+            name: 'Gazdag zöldségtartalom',
+            impact: 'pozitív',
+            explanation: 'Sok zöldség növeli a vitamin- és rosttartalmat.',
+            importance: 0.8
+        });
+    }
+    
+    const meatCount = recipeData.ingredients.filter(ing =>
+        ['hús', 'csirke', 'marha', 'sertés'].some(meat => ing.includes(meat))
+    ).length;
+    
+    if (meatCount > 0) {
+        factors.push({
+            name: 'Húsfehérje tartalom',
+            impact: 'semleges',
+            explanation: 'A hús jó fehérjeforrás, de modéráltan fogyasztandó.',
+            importance: 0.6
+        });
+    }
+    
+    return factors.slice(0, 4);
+}
+
+/**
+ * Alapértelmezett javaslatok generálása
+ * 
+ * @param {Object} recipeData - Recept adatok
+ * @returns {Array} Javaslatok
+ */
+function generateDefaultSuggestions(recipeData) {
+    const suggestions = [];
+    
+    // Fenntarthatóság alapján
+    if (recipeData.sustainabilityIndex < 60) {
+        suggestions.push('Próbáljon több zöldséget vagy növényi alapú fehérjét használni.');
+    }
+    
+    // Környezeti hatás alapján
+    if (recipeData.envScore > 60) {
+        suggestions.push('Csökkentse a magas környezeti hatású hozzávalók mennyiségét.');
+    }
+    
+    // Specifikus hozzávaló javaslatok
+    const hasBeef = recipeData.ingredients.some(ing => ing.includes('marha'));
+    if (hasBeef) {
+        suggestions.push('A marhahús helyett próbáljon babot, lencsét vagy csirkét használni.');
+    }
+    
+    const hasLowVeggies = recipeData.ingredients.filter(ing =>
+        ['zöldség', 'saláta', 'paradicsom', 'uborka'].some(veg => ing.includes(veg))
+    ).length < 2;
+    
+    if (hasLowVeggies) {
+        suggestions.push('Adjon hozzá több friss zöldséget a tápérték növelésére.');
+    }
+    
+    // Kategória specifikus javaslatok
+    if (recipeData.category === 'főétel' && recipeData.sustainabilityIndex < 70) {
+        suggestions.push('Főételnél különösen fontos a fenntartható hozzávalók választása.');
+    }
+    
+    return suggestions.length > 0 ? suggestions : ['Ez a recept már jó egyensúlyt mutat!'];
+}
+
+/**
+ * Alapértelmezett összefoglaló generálása
+ * 
+ * @param {Object} recipeData - Recept adatok
+ * @returns {string} Összefoglaló szöveg
+ */
+function generateDefaultSummary(recipeData) {
+    const sustainScore = recipeData.sustainabilityIndex;
+    const envScore = recipeData.envScore;
+    
+    let evaluation = '';
+    if (sustainScore >= 80) {
+        evaluation = 'kiválóan fenntartható';
+    } else if (sustainScore >= 60) {
+        evaluation = 'jól fenntartható';
+    } else if (sustainScore >= 40) {
+        evaluation = 'közepesen fenntartható';
+    } else {
+        evaluation = 'kevésbé fenntartható';
+    }
+    
+    let envImpact = '';
+    if (envScore <= 30) {
+        envImpact = 'alacsony környezeti hatással';
+    } else if (envScore <= 60) {
+        envImpact = 'mérsékelt környezeti hatással';
+    } else {
+        envImpact = 'magas környezeti hatással';
+    }
+    
+    return `Ez a ${recipeData.category} recept ${evaluation} és ${envImpact} rendelkezik. A ${sustainScore.toFixed(1)}/100 fenntarthatósági pontszám a hozzávalók környezeti hatásának és táplálkozási értékének kombinációjából adódik.`;
+}
+
+/**
+ * Kategória környezeti hatásának meghatározása
+ * 
+ * @param {string} category - Recept kategória
+ * @returns {Object} Kategória hatás
+ */
+function getCategoryEnvironmentalImpact(category) {
+    const categoryImpacts = {
+        'saláta': {
+            name: 'Saláta kategória',
+            impact: 'pozitív',
+            explanation: 'Salátáknak általában alacsony a környezeti lábnyoma.',
+            importance: 0.7
+        },
+        'leves': {
+            name: 'Leves kategória', 
+            impact: 'pozitív',
+            explanation: 'Levesek hatékonyan használják fel a hozzávalókat.',
+            importance: 0.6
+        },
+        'főétel': {
+            name: 'Főétel kategória',
+            impact: 'semleges',
+            explanation: 'Főételek környezeti hatása a hozzávalóktól függ.',
+            importance: 0.5
+        },
+        'desszert': {
+            name: 'Desszert kategória',
+            impact: 'negatív',
+            explanation: 'Desszertek gyakran energiaigényes hozzávalókat tartalmaznak.',
+            importance: 0.4
+        }
+    };
+    
+    return categoryImpacts[category] || {
+        name: 'Kategória hatás',
+        impact: 'semleges',
+        explanation: 'A kategória környezeti hatása átlagos.',
+        importance: 0.3
+    };
+}
+
+/**
+ * Fallback magyarázat generálása
  * 
  * @param {Object} recipe - Recept objektum
  * @returns {Object} Egyszerű magyarázat
  */
 function generateFallbackExplanation(recipe) {
+    const sustainabilityIndex = recipe.sustainability_index || 50;
+    const envScore = recipe.env_score || 50;
+    const nutriScore = recipe.nutri_score || 50;
+    
     return {
-        success: false,
+        summary: `Ez a recept ${sustainabilityIndex.toFixed(1)}/100 fenntarthatósági pontot kapott. A pontozás a környezeti hatás (${envScore.toFixed(1)}) és a táplálkozási érték (${nutriScore.toFixed(1)}) alapján történt.`,
         environmentalFactors: [
-            { 
-                name: 'általános hatás', 
-                impact: recipe.env_score > 50 ? 'negatív' : 'pozitív',
-                importance: 1.0,
-                explanation: 'A recept általános környezeti hatása az összetevők alapján.'
+            {
+                name: 'Környezeti hatás',
+                impact: envScore > 60 ? 'negatív' : envScore > 40 ? 'semleges' : 'pozitív',
+                explanation: `A recept környezeti pontszáma ${envScore.toFixed(1)}/100.`,
+                importance: 0.8
             }
         ],
         nutritionalFactors: [
-            { 
-                name: 'tápanyagtartalom', 
-               impact: recipe.nutri_score > 50 ? 'pozitív' : 'negatív',
-                importance: 1.0,
-                explanation: 'A recept általános táplálkozási értéke az összetevők alapján.'
+            {
+                name: 'Táplálkozási érték',
+                impact: nutriScore > 60 ? 'pozitív' : nutriScore > 40 ? 'semleges' : 'negatív',
+                explanation: `A recept táplálkozási pontszáma ${nutriScore.toFixed(1)}/100.`,
+                importance: 0.7
             }
         ],
         suggestions: [
-            'Részletes magyarázat nem elérhető, kérjük próbálja újra később.'
+            'Részletes AI magyarázat jelenleg nem elérhető.',
+            'A pontszámok a hozzávalók fenntarthatósági hatása alapján készültek.'
         ],
-        summary: 'Egyszerűsített értékelés a rendelkezésre álló adatok alapján.',
-        model: 'Fallback-Explainer',
-        confidence: 0.5
+        confidence: 0.6,
+        source: 'fallback'
     };
 }
 
 /**
- * Összes recept elemzése és hasonlóságok keresése
+ * Hasonló, de fenntarthatóbb receptek keresése
  * 
- * @param {Object} recipe - Vizsgált recept
+ * @param {Object} targetRecipe - Eredeti recept
  * @param {Array} allRecipes - Összes recept
- * @returns {Array} Hasonló receptek javaslatok
+ * @param {number} limit - Maximum eredmények
+ * @returns {Array} Hasonló receptek javított fenntarthatósággal
  */
-export function findSimilarButMoreSustainableRecipes(recipe, allRecipes) {
-    try {
-        if (!recipe || !allRecipes || !allRecipes.length) {
-            return [];
-        }
-        
-        // Kategória egyezés
-        const sameCategory = allRecipes.filter(r => 
-            r.category === recipe.category && 
-            r.recipeid !== recipe.recipeid &&
-            (r.sustainability_index || 0) > (recipe.sustainability_index || 0)
-        );
-        
-        // Hozzávalók hasonlósága
-        const recipeIngredients = (recipe.ingredients || '')
-            .toLowerCase()
-            .replace(/^c\(|\)$/g, '')
-            .replace(/"/g, '')
-            .split(',')
-            .map(i => i.trim())
-            .filter(i => i.length > 0);
-        
-        // Pontszám számítása az egyező hozzávalók alapján
-        const scoredRecipes = sameCategory.map(r => {
-            const targetIngredients = (r.ingredients || '')
-                .toLowerCase()
-                .replace(/^c\(|\)$/g, '')
-                .replace(/"/g, '')
-                .split(',')
-                .map(i => i.trim())
-                .filter(i => i.length > 0);
+export function findSimilarButMoreSustainableRecipes(targetRecipe, allRecipes, limit = 3) {
+    if (!targetRecipe || !allRecipes || !Array.isArray(allRecipes)) {
+        return [];
+    }
+    
+    const targetSustainability = targetRecipe.sustainability_index || 50;
+    const targetIngredients = preprocessIngredients(targetRecipe.ingredients);
+    
+    const candidates = allRecipes
+        .filter(recipe => {
+            // Kizárjuk az eredeti receptet
+            if (recipe.recipeid === targetRecipe.recipeid) return false;
             
-            // Közös hozzávalók számítása
-            const commonIngredients = recipeIngredients.filter(ing => 
-                targetIngredients.some(targetIng => targetIng.includes(ing) || ing.includes(targetIng))
-            );
-            
-            // Hasonlósági pontszám (Jaccard index)
-            const similarityScore = commonIngredients.length / 
-                (recipeIngredients.length + targetIngredients.length - commonIngredients.length);
-            
-            // Fenntarthatósági különbség
-            const sustainabilityDifference = 
-                (r.sustainability_index || 0) - (recipe.sustainability_index || 0);
+            // Csak fenntarthatóbb recepteket
+            const recipeSustainability = recipe.sustainability_index || 50;
+            return recipeSustainability > targetSustainability + 5; // Minimum 5 pont javulás
+        })
+        .map(recipe => {
+            const recipeIngredients = preprocessIngredients(recipe.ingredients);
+            const similarity = calculateIngredientSimilarity(targetIngredients, recipeIngredients);
+            const sustainabilityImprovement = (recipe.sustainability_index || 50) - targetSustainability;
             
             return {
-                recipe: r,
-                similarityScore,
-                sustainabilityDifference,
-                // Kombinált pontszám (hasonlóság + fenntarthatósági különbség)
-                totalScore: similarityScore * 0.7 + (sustainabilityDifference / 50) * 0.3
+                recipe,
+                similarity,
+                sustainabilityImprovement,
+                score: (similarity * 0.7) + (sustainabilityImprovement / 100 * 0.3)
             };
-        });
-        
-        // Rendezés kombinált pontszám szerint
-        return scoredRecipes
-            .sort((a, b) => b.totalScore - a.totalScore)
-            .slice(0, 3)
-            .map(item => ({
-                recipe: item.recipe,
-                similarity: Math.round(item.similarityScore * 100),
-                sustainabilityImprovement: Math.round(item.sustainabilityDifference)
-            }));
-            
-    } catch (error) {
-        console.error('❌ Hasonló receptek keresési hiba:', error);
-        return [];
-    }
+        })
+        .filter(item => item.similarity > 0.3) // Minimum hasonlóság
+        .sort((a, b) => b.score - a.score)
+        .slice(0, limit);
+    
+    return candidates;
 }
 
 /**
- * Egyszerű hozzávaló-alapú fenntarthatósági becslés
- * (Csak demonstrációs célra)
+ * Összetevő helyettesítési javaslatok
  * 
  * @param {Object} recipe - Recept objektum
- * @returns {Array} Módosítási javaslatok
+ * @returns {Array} Helyettesítési javaslatok
  */
 export function suggestIngredientSubstitutions(recipe) {
-    try {
-        if (!recipe || !recipe.ingredients) {
-            return [];
-        }
-        
-        const ingredients = (recipe.ingredients || '')
-            .toLowerCase()
-            .replace(/^c\(|\)$/g, '')
-            .replace(/"/g, '')
-            .split(',')
-            .map(i => i.trim())
-            .filter(i => i.length > 0);
-        
-        const substitutions = [];
-        
-        // Ismert helyettesítések
-        const knownSubstitutions = {
-            'marhahús': { 
-                replace: 'csirkehús', 
-                improvementPercent: 40,
-                explanation: 'A csirkehús előállítása jelentősen kevesebb üvegházhatású gáz kibocsátással jár.'
-            },
-            'sertéshús': { 
-                replace: 'csirkehús', 
-                improvementPercent: 25,
-                explanation: 'A csirkehús előállítása kevesebb üvegházhatású gáz kibocsátással jár.'
-            },
-            'marhahús': { 
-                replace: 'növényi húshelyettesítő', 
-                improvementPercent: 75,
-                explanation: 'A növényi alapú húshelyettesítők töredék környezeti hatással járnak.'
-            },
-            'vaj': { 
-                replace: 'olívaolaj', 
-                improvementPercent: 30,
-                explanation: 'A növényi olajok általában kisebb környezeti hatással járnak, mint az állati eredetű zsiradékok.'
-            },
-            'tejszín': { 
-                replace: 'kókusztejszín', 
-                improvementPercent: 35,
-                explanation: 'A növényi alapú tejszínhelyettesítők kisebb környezeti hatással járnak.'
-            },
-            'tej': { 
-                replace: 'növényi tej', 
-                improvementPercent: 40,
-                explanation: 'A növényi tejek (pl. zab-, mandula-, szójatej) kisebb környezeti lábnyommal rendelkeznek.'
-            }
-        };
-        
-        // Végigmegyünk az összetevőkön és megnézzük, hogy van-e fenntarthatóbb helyettesítő
-        ingredients.forEach(ingredient => {
-            Object.entries(knownSubstitutions).forEach(([target, suggestion]) => {
-                if (ingredient.includes(target)) {
-                    substitutions.push({
-                        original: ingredient,
-                        substitute: suggestion.replace,
-                        improvementPercent: suggestion.improvementPercent,
-                        explanation: suggestion.explanation
-                    });
-                }
-            });
-        });
-        
-        return substitutions;
-        
-    } catch (error) {
-        console.error('❌ Helyettesítési javaslat hiba:', error);
+    if (!recipe || !recipe.ingredients) {
         return [];
     }
+    
+    const ingredients = preprocessIngredients(recipe.ingredients);
+    const substitutions = [];
+    
+    // Helyettesítési táblázat
+    const substitutionMap = {
+        'marha': {
+            substitutes: ['lencse', 'csicseriborsó', 'tofu', 'tempeh'],
+            improvementPercent: 60,
+            explanation: 'Növényi fehérjék sokkal alacsonyabb környezeti hatással rendelkeznek.'
+        },
+        'marhahús': {
+            substitutes: ['bab', 'quinoa', 'szeitan'],
+            improvementPercent: 65,
+            explanation: 'Növényi alapú alternatívák drámaian csökkentik a szén-lábnyomot.'
+        },
+        'sertés': {
+            substitutes: ['csirke', 'hal', 'tofu'],
+            improvementPercent: 35,
+            explanation: 'Alternatív fehérjeforrások alacsonyabb környezeti hatással.'
+        },
+        'csirke': {
+            substitutes: ['hal', 'tojás', 'cottage cheese'],
+            improvementPercent: 20,
+            explanation: 'Kevésbé erőforrás-igényes állati fehérjék.'
+        },
+        'vaj': {
+            substitutes: ['olívaolaj', 'kókuszolaj', 'avokádó'],
+            improvementPercent: 30,
+            explanation: 'Növényi zsírok alacsonyabb környezeti hatással.'
+        },
+        'tejszín': {
+            substitutes: ['kókusztej', 'zabtej', 'mandulakrém'],
+            improvementPercent: 40,
+            explanation: 'Növényi tejek kevesebb erőforrást igényelnek.'
+        },
+        'saj': { // sajt részleges egyezéshez
+            substitutes: ['nutritional yeast', 'kesutej-sajt', 'tofu-sajt'],
+            improvementPercent: 45,
+            explanation: 'Növényi sajtalternatívák fenntarthatóbbak.'
+        }
+    };
+    
+    ingredients.forEach(ingredient => {
+        // Pontos egyezés keresése
+        for (const [key, data] of Object.entries(substitutionMap)) {
+            if (ingredient.includes(key) || key.includes(ingredient)) {
+                const substitute = data.substitutes[Math.floor(Math.random() * data.substitutes.length)];
+                substitutions.push({
+                    original: ingredient,
+                    substitute: substitute,
+                    improvementPercent: data.improvementPercent,
+                    explanation: data.explanation
+                });
+                break; // Egy ingredienshez csak egy javaslat
+            }
+        }
+    });
+    
+    return substitutions.slice(0, 3); // Maximum 3 javaslat
 }
 
 /**
- * Eco-Score különbség vizualizációs adatok generálása
+ * Hozzávalók előfeldolgozása
  * 
- * @param {number} currentScore - Jelenlegi pontszám
- * @param {number} improvedScore - Javított pontszám 
- * @returns {Object} Vizualizációs adatok
+ * @param {string} ingredients - Hozzávalók string
+ * @returns {Array} Tisztított hozzávalók
  */
-export function generateScoreComparisonData(currentScore, improvedScore) {
-    // CO2 egyenérték becslése kg/adag
-    const estimatedCO2Current = (100 - currentScore) * 0.015;
-    const estimatedCO2Improved = (100 - improvedScore) * 0.015;
-    const co2Reduction = estimatedCO2Current - estimatedCO2Improved;
+function preprocessIngredients(ingredients) {
+    if (!ingredients || typeof ingredients !== 'string') {
+        return [];
+    }
     
-    // Vízlábnyom becslése liter/adag
-    const estimatedWaterCurrent = (100 - currentScore) * 10;
-    const estimatedWaterImproved = (100 - improvedScore) * 10;
-    const waterReduction = estimatedWaterCurrent - estimatedWaterImproved;
-    
-    // Földhasználat becslése m²/adag
-    const estimatedLandCurrent = (100 - currentScore) * 0.08;
-    const estimatedLandImproved = (100 - improvedScore) * 0.08;
-    const landReduction = estimatedLandCurrent - estimatedLandImproved;
-    
-    return {
-        scores: {
-            current: currentScore,
-            improved: improvedScore,
-            difference: improvedScore - currentScore,
-            percentImprovement: Math.round((improvedScore - currentScore) / currentScore * 100)
-        },
-        environmentalImpact: {
-            co2: {
-                current: estimatedCO2Current.toFixed(2),
-                improved: estimatedCO2Improved.toFixed(2),
-                reduction: co2Reduction.toFixed(2),
-                percentReduction: Math.round(co2Reduction / estimatedCO2Current * 100)
-            },
-            water: {
-                current: Math.round(estimatedWaterCurrent),
-                improved: Math.round(estimatedWaterImproved),
-                reduction: Math.round(waterReduction),
-                percentReduction: Math.round(waterReduction / estimatedWaterCurrent * 100)
-            },
-            land: {
-                current: estimatedLandCurrent.toFixed(2),
-                improved: estimatedLandImproved.toFixed(2),
-                reduction: landReduction.toFixed(2),
-                percentReduction: Math.round(landReduction / estimatedLandCurrent * 100)
-            }
-        },
-        comparisons: [
-            {
-                label: 'Autóval megtett km',
-                value: Math.round(co2Reduction * 6),
-                unit: 'km',
-                icon: '🚗'
-            },
-            {
-                label: 'Zuhanyozással megtakarított víz',
-                value: Math.round(waterReduction / 50),
-                unit: 'zuhanyzás',
-                icon: '🚿'
-            }
-        ]
-    };
+    return ingredients
+        .toLowerCase()
+        .replace(/^c\(|\)$/g, '')
+        .replace(/["']/g, '')
+        .split(',')
+        .map(ing => ing.trim())
+        .filter(ing => ing.length > 0);
 }
+
+/**
+ * Hozzávalók hasonlóságának számítása
+ * 
+ * @param {Array} ingredients1 - Első hozzávaló lista
+ * @param {Array} ingredients2 - Második hozzávaló lista
+ * @returns {number} Hasonlóság (0-1)
+ */
+function calculateIngredientSimilarity(ingredients1, ingredients2) {
+    if (!ingredients1.length || !ingredients2.length) {
+        return 0;
+    }
+    
+    const set1 = new Set(ingredients1);
+    const set2 = new Set(ingredients2);
+    
+    // Jaccard hasonlóság
+    const intersection = new Set([...set1].filter(x => set2.has(x)));
+    const union = new Set([...set1, ...set2]);
+    
+    return intersection.size / union.size;
+}
+
+/**
+ * XAI cache kezelés
+ */
+export const XAICache = {
+    cache: new Map(),
+    maxSize: 100,
+    
+    get(key) {
+        return this.cache.get(key);
+    },
+    
+    set(key, value) {
+        if (this.cache.size >= this.maxSize) {
+            const firstKey = this.cache.keys().next().value;
+            this.cache.delete(firstKey);
+        }
+        this.cache.set(key, value);
+    },
+    
+    clear() {
+        this.cache.clear();
+    },
+    
+    size() {
+        return this.cache.size;
+    }
+};
