@@ -51,96 +51,46 @@ export function calculateSustainabilityScore(envScore, nutriScore, category = 'e
  */
 function getCategoryModifier(category) {
     const modifiers = CONFIG.SUSTAINABILITY?.CATEGORY_MODIFIERS || {
-        'saláta': 5,      // Növényi alapú ételek bónusza
-        'leves': 3,       // Általában kevesebb hús
-        'főétel': 0,      // Semleges
-        'desszert': -2,   // Általában cukor/tejtermékek
-        'ital': 2,        // Folyadék, kevesebb erőforrás
-        'reggeli': 1,     // Változó, de általában könnyebb
-        'köret': 2,       // Általában növényi
-        'egyéb': 0        // Semleges
+        'saláta': 5,      // Salátáknak bónusz
+        'leves': 3,       // Leveseknek kis bónusz
+        'főétel': 0,      // Főételeknek semleges
+        'desszert': -2,   // Desszerteknek kis levonás
+        'ital': 2,        // Italoknak kis bónusz
+        'reggeli': 1,     // Reggeliknek kis bónusz
+        'köret': 2,       // Köreteknek kis bónusz
+        'egyéb': 0        // Egyéb ételeknek semleges
     };
     
     return modifiers[category] || 0;
 }
 
 /**
- * Kategória meghatározása hozzávalók alapján
- * 
- * @param {string} ingredients - Hozzávalók string
- * @param {string} name - Recept neve
- * @returns {string} Kategória
- */
-export function determineCategory(ingredients, name = '') {
-    if (!ingredients && !name) {
-        return 'egyéb';
-    }
-    
-    const text = `${ingredients} ${name}`.toLowerCase();
-    
-    // Kategória kulcsszavak
-    const categoryKeywords = {
-        'saláta': ['saláta', 'uborka', 'paradicsom', 'fejes', 'salát', 'retek', 'paprika'],
-        'leves': ['leves', 'húsleves', 'zöldségleves', 'krémleves', 'borsóleves', 'gulyás'],
-        'főétel': ['hús', 'csirke', 'marha', 'sertés', 'hal', 'schnitzel', 'pörkölt', 'ragu', 'pizza'],
-        'desszert': ['torta', 'sütemény', 'fagylalt', 'pudding', 'keksz', 'csoki', 'csokoládé', 'krémes'],
-        'ital': ['smoothie', 'tea', 'kávé', 'juice', 'lé', 'ital', 'shake'],
-        'reggeli': ['reggeli', 'tojás', 'omlett', 'pirítós', 'müzli', 'zabkása', 'pancake'],
-        'köret': ['köret', 'rizs', 'tészta', 'burgonya', 'krumpli', 'nokedli', 'galuska']
-    };
-    
-    // Pontszám alapú kategorizálás
-    let maxScore = 0;
-    let detectedCategory = 'egyéb';
-    
-    for (const [category, keywords] of Object.entries(categoryKeywords)) {
-        let score = 0;
-        keywords.forEach(keyword => {
-            if (text.includes(keyword)) {
-                score += keyword.length; // Hosszabb kulcsszavak nagyobb súlyt kapnak
-            }
-        });
-        
-        if (score > maxScore) {
-            maxScore = score;
-            detectedCategory = category;
-        }
-    }
-    
-    return detectedCategory;
-}
-
-/**
- * Kategória ikon lekérése
- * 
- * @param {string} category - Kategória
- * @returns {string} Emoji ikon
- */
-export function getCategoryIcon(category) {
-    return CONFIG.CATEGORY_ICONS[category] || CONFIG.CATEGORY_ICONS['egyéb'];
-}
-
-/**
- * Környezeti pontszám színkódja
+ * Környezeti hatás színének meghatározása
  * 
  * @param {number} envScore - Környezeti pontszám (0-100)
  * @returns {string} CSS szín
  */
 export function getEnvironmentalColor(envScore) {
     if (typeof envScore !== 'number') {
-        return '#666666'; // Szürke az ismeretlen értékekhez
+        return '#666666'; // Szürke ismeretlen értékekhez
     }
     
-    // Skála: 0 = legjobb (zöld), 100 = legrosszabb (piros)
-    if (envScore <= 20) return '#22c55e';  // Zöld
-    if (envScore <= 40) return '#84cc16';  // Világoszöld
-    if (envScore <= 60) return '#eab308';  // Sárga
-    if (envScore <= 80) return '#f97316';  // Narancs
-    return '#ef4444';                      // Piros
+    // Környezeti pontszám: magasabb = rosszabb
+    if (envScore <= 20) {
+        return '#22c55e'; // Zöld - nagyon jó
+    } else if (envScore <= 40) {
+        return '#84cc16'; // Világoszöld - jó
+    } else if (envScore <= 60) {
+        return '#eab308'; // Sárga - közepes
+    } else if (envScore <= 80) {
+        return '#f97316'; // Narancs - rossz
+    } else {
+        return '#ef4444'; // Piros - nagyon rossz
+    }
 }
 
 /**
- * Környezeti pontszám címkéje
+ * Környezeti hatás címkéjének meghatározása
  * 
  * @param {number} envScore - Környezeti pontszám (0-100)
  * @returns {string} Leíró címke
@@ -150,18 +100,24 @@ export function getEnvironmentalLabel(envScore) {
         return 'Ismeretlen';
     }
     
-    if (envScore <= 20) return 'Kiváló';
-    if (envScore <= 40) return 'Jó';
-    if (envScore <= 60) return 'Közepes';
-    if (envScore <= 80) return 'Gyenge';
-    return 'Rossz';
+    if (envScore <= 20) {
+        return 'Kiváló';
+    } else if (envScore <= 40) {
+        return 'Jó';
+    } else if (envScore <= 60) {
+        return 'Közepes';
+    } else if (envScore <= 80) {
+        return 'Rossz';
+    } else {
+        return 'Nagyon rossz';
+    }
 }
 
 /**
  * Fenntarthatósági pontszám értékelése
  * 
  * @param {number} sustainabilityIndex - Fenntarthatósági index (0-100)
- * @returns {Object} Értékelési objektum
+ * @returns {Object} Értékelés objektum (label, icon, color, category)
  */
 export function evaluateSustainabilityScore(sustainabilityIndex) {
     if (typeof sustainabilityIndex !== 'number') {
@@ -169,288 +125,314 @@ export function evaluateSustainabilityScore(sustainabilityIndex) {
             label: 'Ismeretlen',
             icon: '❓',
             color: '#666666',
-            description: 'Nem sikerült értékelni a fenntarthatóságot'
+            category: 'unknown'
         };
     }
     
-    const ranges = CONFIG.SUSTAINABILITY?.SCORE_RANGES || [
-        { min: 90, label: 'Kiváló', icon: '✨', color: '#22c55e' },
-        { min: 80, label: 'Kiváló', icon: '✨', color: '#22c55e' },
-        { min: 70, label: 'Nagyon jó', icon: '🌿', color: '#84cc16' },
-        { min: 60, label: 'Jó', icon: '👍', color: '#65a30d' },
-        { min: 50, label: 'Megfelelő', icon: '🆗', color: '#eab308' },
-        { min: 40, label: 'Közepes', icon: '⚠️', color: '#f59e0b' },
-        { min: 30, label: 'Gyenge', icon: '📉', color: '#f97316' },
-        { min: 0, label: 'Rossz', icon: '⚠️', color: '#ef4444' }
+    const categories = CONFIG.SUSTAINABILITY?.SCORE_CATEGORIES || [
+        { min: 90, label: 'Kiváló', icon: '✨', color: '#22c55e', category: 'excellent' },
+        { min: 80, label: 'Nagyon jó', icon: '🌿', color: '#84cc16', category: 'very-good' },
+        { min: 70, label: 'Jó', icon: '👍', color: '#10b981', category: 'good' },
+        { min: 60, label: 'Megfelelő', icon: '🆗', color: '#eab308', category: 'acceptable' },
+        { min: 50, label: 'Közepes', icon: '⚠️', color: '#f59e0b', category: 'average' },
+        { min: 40, label: 'Gyenge', icon: '📉', color: '#f97316', category: 'poor' },
+        { min: 0, label: 'Rossz', icon: '❌', color: '#ef4444', category: 'bad' }
     ];
     
-    const evaluation = ranges.find(range => sustainabilityIndex >= range.min) || ranges[ranges.length - 1];
+    for (const category of categories) {
+        if (sustainabilityIndex >= category.min) {
+            return {
+                label: category.label,
+                icon: category.icon,
+                color: category.color,
+                category: category.category
+            };
+        }
+    }
     
+    // Fallback
     return {
-        ...evaluation,
-        description: getScoreDescription(sustainabilityIndex)
+        label: 'Rossz',
+        icon: '❌',
+        color: '#ef4444',
+        category: 'bad'
     };
 }
 
 /**
- * Pontszám részletes leírása
+ * Kategória meghatározása hozzávalók alapján
  * 
- * @param {number} score - Pontszám (0-100)
- * @returns {string} Leírás
+ * @param {string} ingredients - Hozzávalók string
+ * @returns {string} Kategória
  */
-function getScoreDescription(score) {
-    if (score >= 80) {
-        return 'Ez egy környezetbarát választás, alacsony ökológiai lábnyommal és jó táplálkozási értékkel.';
-    } else if (score >= 60) {
-        return 'Jó választás a fenntarthatóság szempontjából, kisebb javítási lehetőségekkel.';
-    } else if (score >= 40) {
-        return 'Közepes fenntarthatóságú étel, érdemes megfontolni alternatívákat.';
-    } else {
-        return 'Ez az étel jelentős környezeti hatással bír, fontolja meg a fenntarthatóbb alternatívákat.';
+export function determineCategory(ingredients) {
+    if (!ingredients || typeof ingredients !== 'string') {
+        return 'egyéb';
     }
+    
+    const lowerIngredients = ingredients.toLowerCase();
+    
+    // Kategória kulcsszavak
+    const categoryKeywords = {
+        'saláta': ['saláta', 'uborka', 'paradicsom', 'paprika', 'hagyma', 'olíva', 'salad'],
+        'leves': ['leves', 'soup', 'krém', 'brokkoli', 'sárgarépa', 'zeller'],
+        'főétel': ['hús', 'csirke', 'marha', 'sertés', 'hal', 'pasta', 'rizs', 'burgonya'],
+        'desszert': ['sütemény', 'torta', 'csokoládé', 'vanília', 'cukor', 'tejszín', 'gyümölcs'],
+        'ital': ['smoothie', 'juice', 'tea', 'kávé', 'víz', 'tej', 'drink'],
+        'reggeli': ['tojás', 'bacon', 'sonka', 'sajt', 'toast', 'müzli', 'joghurt'],
+        'köret': ['krumpli', 'burgonya', 'rizs', 'pasta', 'zöldség', 'bab', 'lencse']
+    };
+    
+    // Pontszámok számítása kategóriánként
+    const scores = {};
+    for (const [category, keywords] of Object.entries(categoryKeywords)) {
+        scores[category] = keywords.reduce((score, keyword) => {
+            return score + (lowerIngredients.includes(keyword) ? 1 : 0);
+        }, 0);
+    }
+    
+    // Legnagyobb pontszámú kategória keresése
+    const bestCategory = Object.entries(scores).reduce((best, [category, score]) => {
+        return score > best.score ? { category, score } : best;
+    }, { category: 'egyéb', score: 0 });
+    
+    return bestCategory.score > 0 ? bestCategory.category : 'egyéb';
 }
 
 /**
- * Hozzávalók környezeti hatásának elemzése
+ * Kategória ikon lekérése
  * 
- * @param {string} ingredients - Hozzávalók string
- * @returns {Object} Környezeti hatás elemzés
+ * @param {string} category - Kategória
+ * @returns {string} Emoji ikon
  */
-export function analyzeEnvironmentalImpact(ingredients) {
-    if (!ingredients || typeof ingredients !== 'string') {
+export function getCategoryIcon(category) {
+    return CONFIG.CATEGORY_ICONS?.[category] || CONFIG.CATEGORY_ICONS?.['egyéb'] || '🍴';
+}
+
+/**
+ * Hozzávaló fenntarthatósági hatása
+ * 
+ * @param {string} ingredient - Hozzávaló neve
+ * @returns {Object} Hatás információ
+ */
+export function getIngredientSustainabilityImpact(ingredient) {
+    if (!ingredient || typeof ingredient !== 'string') {
+        return { impact: 'neutral', score: 0, explanation: 'Ismeretlen hozzávaló' };
+    }
+    
+    const lowerIngredient = ingredient.toLowerCase().trim();
+    
+    // Fenntarthatósági adatbázis
+    const sustainabilityData = {
+        // Nagyon jó (alacsony környezeti hatás)
+        'saláta': { impact: 'positive', score: 8, explanation: 'Alacsony szén-dioxid kibocsátás és vízigény' },
+        'paradicsom': { impact: 'positive', score: 7, explanation: 'Helyi termesztés esetén környezetbarát' },
+        'uborka': { impact: 'positive', score: 8, explanation: 'Minimális erőforrás igény' },
+        'spenót': { impact: 'positive', score: 9, explanation: 'Magas tápérték, alacsony környezeti hatás' },
+        'brokkoli': { impact: 'positive', score: 8, explanation: 'Kiváló tápérték, alacsony szén-lábnyom' },
+        'sárgarépa': { impact: 'positive', score: 8, explanation: 'Hosszú tárolhatóság, alacsony hulladék' },
+        'zöldség': { impact: 'positive', score: 7, explanation: 'Általában környezetbarát' },
+        'gyümölcs': { impact: 'positive', score: 7, explanation: 'Természetes, minimálisan feldolgozott' },
+        'bab': { impact: 'positive', score: 9, explanation: 'Magas fehérjetartalom, nitrogén fixálás' },
+        'lencse': { impact: 'positive', score: 9, explanation: 'Fenntartható fehérjeforrás' },
+        'quinoa': { impact: 'positive', score: 8, explanation: 'Teljes fehérje, alacsony vízigény' },
+        
+        // Jó (mérsékelt hatás)
+        'rizs': { impact: 'neutral', score: 5, explanation: 'Mérsékelt környezeti hatás' },
+        'pasta': { impact: 'neutral', score: 5, explanation: 'Gabona alapú, közepes fenntarthatóság' },
+        'krumpli': { impact: 'neutral', score: 6, explanation: 'Jó tápérték, közepes erőforrás igény' },
+        'burgonya': { impact: 'neutral', score: 6, explanation: 'Jó tápérték, közepes erőforrás igény' },
+        'tojás': { impact: 'neutral', score: 4, explanation: 'Jó fehérje, de állattenyésztés hatása' },
+        'tej': { impact: 'neutral', score: 3, explanation: 'Tápláló, de tejtermék környezeti hatás' },
+        'sajt': { impact: 'neutral', score: 3, explanation: 'Magas tápérték, de jelentős környezeti hatás' },
+        'hal': { impact: 'neutral', score: 4, explanation: 'Jó fehérje, de túlhalászat kockázat' },
+        
+        // Rossz (magas környezeti hatás)
+        'csirke': { impact: 'negative', score: -2, explanation: 'Állattenyésztés környezeti hatása' },
+        'csirkemell': { impact: 'negative', score: -2, explanation: 'Állattenyésztés környezeti hatása' },
+        'sertés': { impact: 'negative', score: -4, explanation: 'Magas szén-dioxid kibocsátás' },
+        'marha': { impact: 'negative', score: -6, explanation: 'Nagyon magas környezeti hatás' },
+        'marhahús': { impact: 'negative', score: -6, explanation: 'Nagyon magas környezeti hatás' },
+        'bacon': { impact: 'negative', score: -5, explanation: 'Feldolgozott hús, magas környezeti hatás' },
+        'sonka': { impact: 'negative', score: -4, explanation: 'Feldolgozott hús' },
+        'vaj': { impact: 'negative', score: -3, explanation: 'Tejtermék, magas szén-lábnyom' },
+        'tejszín': { impact: 'negative', score: -3, explanation: 'Magas zsírtartalmú tejtermék' }
+    };
+    
+    // Pontos egyezés keresése
+    if (sustainabilityData[lowerIngredient]) {
+        return sustainabilityData[lowerIngredient];
+    }
+    
+    // Részleges egyezés keresése
+    for (const [key, data] of Object.entries(sustainabilityData)) {
+        if (lowerIngredient.includes(key) || key.includes(lowerIngredient)) {
+            return data;
+        }
+    }
+    
+    // Alapértelmezett neutral
+    return { impact: 'neutral', score: 0, explanation: 'Ismeretlen fenntarthatósági hatás' };
+}
+
+/**
+ * Recept fenntarthatósági elemzése
+ * 
+ * @param {Object} recipe - Recept objektum
+ * @returns {Object} Részletes elemzés
+ */
+export function analyzeSustainability(recipe) {
+    if (!recipe || !recipe.ingredients) {
         return {
-            totalImpact: 50,
-            highImpactIngredients: [],
-            lowImpactIngredients: [],
+            overallScore: 50,
+            analysis: 'Nincs elegendő adat az elemzéshez',
+            ingredients: [],
             recommendations: []
         };
     }
     
-    const ingredientList = ingredients.toLowerCase()
-        .replace(/[c\(\)"']/g, '')
-        .split(/[,\s]+/)
-        .filter(item => item.length > 2);
+    // Hozzávalók feldolgozása
+    const ingredients = recipe.ingredients
+        .toLowerCase()
+        .replace(/^c\(|\)$/g, '') // R lista formátum eltávolítása
+        .replace(/["']/g, '')     // Idézőjelek eltávolítása
+        .split(',')
+        .map(ingredient => ingredient.trim())
+        .filter(ingredient => ingredient.length > 0);
     
-    // Környezeti hatás kategóriák
-    const impactCategories = {
-        high: {
-            keywords: ['marha', 'marhahús', 'borjú', 'bárány', 'sertés', 'szalonna', 'bacon', 'vaj', 'tejszín', 'sajt'],
-            impact: 80,
-            recommendations: ['Próbáljon növényi alternatívákat', 'Csökkentse a húsmennyiséget']
-        },
-        medium: {
-            keywords: ['csirke', 'tyúk', 'tojás', 'hal', 'tej', 'joghurt', 'tejföl'],
-            impact: 50,
-            recommendations: ['Válasszon bio vagy helyi termékeket', 'Mérsékelje a fogyasztást']
-        },
-        low: {
-            keywords: ['zöldség', 'gyümölcs', 'rizs', 'tészta', 'bab', 'lencse', 'quinoa', 'zab', 'alma', 'paradicsom', 'spenót'],
-            impact: 20,
-            recommendations: ['Kiváló választás!', 'Támogassa a helyi termelőket']
-        }
-    };
+    // Hozzávalók elemzése
+    const ingredientAnalysis = ingredients.map(ingredient => ({
+        name: ingredient,
+        ...getIngredientSustainabilityImpact(ingredient)
+    }));
     
-    let totalImpact = 50;
-    const highImpactIngredients = [];
-    const lowImpactIngredients = [];
-    const recommendations = [];
+    // Átlagos hatás számítása
+    const totalScore = ingredientAnalysis.reduce((sum, item) => sum + item.score, 0);
+    const avgScore = ingredients.length > 0 ? totalScore / ingredients.length : 0;
     
-    let impactSum = 0;
-    let ingredientCount = 0;
+    // Skálázás 0-100 tartományra
+    const scaledScore = Math.max(0, Math.min(100, 50 + (avgScore * 5)));
     
-    ingredientList.forEach(ingredient => {
-        let classified = false;
-        
-        for (const [category, data] of Object.entries(impactCategories)) {
-            if (data.keywords.some(keyword => ingredient.includes(keyword))) {
-                impactSum += data.impact;
-                ingredientCount++;
-                classified = true;
-                
-                if (category === 'high') {
-                    highImpactIngredients.push(ingredient);
-                } else if (category === 'low') {
-                    lowImpactIngredients.push(ingredient);
-                }
-                
-                recommendations.push(...data.recommendations);
-                break;
-            }
-        }
-        
-        // Ha nincs kategorizálva, közepes hatásként számolunk
-        if (!classified) {
-            impactSum += 40;
-            ingredientCount++;
-        }
-    });
-    
-    if (ingredientCount > 0) {
-        totalImpact = Math.round(impactSum / ingredientCount);
-    }
-    
-    // Duplikátumok eltávolítása a javaslatokból
-    const uniqueRecommendations = [...new Set(recommendations)];
+    // Javaslatok generálása
+    const recommendations = generateSustainabilityRecommendations(ingredientAnalysis);
     
     return {
-        totalImpact,
-        highImpactIngredients,
-        lowImpactIngredients,
-        recommendations: uniqueRecommendations
+        overallScore: Math.round(scaledScore * 10) / 10,
+        analysis: generateAnalysisText(ingredientAnalysis, scaledScore),
+        ingredients: ingredientAnalysis,
+        recommendations
     };
 }
 
 /**
- * Táplálkozási érték számítása hozzávalók alapján
+ * Fenntarthatósági javaslatok generálása
  * 
- * @param {string} ingredients - Hozzávalók string
- * @returns {number} Becsült táplálkozási pontszám (0-100)
+ * @param {Array} ingredientAnalysis - Hozzávalók elemzése
+ * @returns {Array} Javaslatok listája
  */
-export function estimateNutritionalValue(ingredients) {
-    if (!ingredients || typeof ingredients !== 'string') {
-        return 50;
-    }
-    
-    const ingredientList = ingredients.toLowerCase()
-        .replace(/[c\(\)"']/g, '')
-        .split(/[,\s]+/)
-        .filter(item => item.length > 2);
-    
-    // Táplálkozási érték kategóriák
-    const nutritionCategories = {
-        excellent: {
-            keywords: ['spenót', 'brokkoli', 'quinoa', 'lencse', 'avokádó', 'dió', 'mandula', 'hal', 'áfonya'],
-            score: 90
-        },
-        good: {
-            keywords: ['zöldség', 'gyümölcs', 'teljes', 'barna', 'zabpehely', 'csirke', 'tojás', 'joghurt'],
-            score: 75
-        },
-        moderate: {
-            keywords: ['rizs', 'tészta', 'burgonya', 'kenyér', 'tej', 'sajt'],
-            score: 60
-        },
-        poor: {
-            keywords: ['cukor', 'zsír', 'olaj', 'vaj', 'szalonna', 'bacon', 'chips', 'édesség'],
-            score: 30
-        }
-    };
-    
-    let totalScore = 0;
-    let ingredientCount = 0;
-    
-    ingredientList.forEach(ingredient => {
-        let scored = false;
-        
-        for (const [category, data] of Object.entries(nutritionCategories)) {
-            if (data.keywords.some(keyword => ingredient.includes(keyword))) {
-                totalScore += data.score;
-                ingredientCount++;
-                scored = true;
-                break;
-            }
-        }
-        
-        // Ha nincs kategorizálva, közepes értékként számolunk
-        if (!scored) {
-            totalScore += 50;
-            ingredientCount++;
-        }
-    });
-    
-    return ingredientCount > 0 ? Math.round(totalScore / ingredientCount) : 50;
-}
-
-/**
- * Fenntarthatóság javítási javaslatok
- * 
- * @param {Object} recipe - Recept objektum
- * @returns {Array} Javítási javaslatok
- */
-export function getSustainabilityRecommendations(recipe) {
+function generateSustainabilityRecommendations(ingredientAnalysis) {
     const recommendations = [];
     
-    if (!recipe) {
-        return recommendations;
+    // Negatív hatású hozzávalók keresése
+    const negativeIngredients = ingredientAnalysis.filter(item => item.impact === 'negative');
+    
+    if (negativeIngredients.length > 0) {
+        recommendations.push('Próbálja csökkenteni a húsfogyasztást a környezeti hatás mérséklése érdekében.');
     }
     
-    const sustainability = recipe.sustainability_index || 0;
-    const envScore = recipe.env_score || 0;
-    const nutriScore = recipe.nutri_score || 0;
+    // Pozitív hozzávalók arányának növelése
+    const positiveIngredients = ingredientAnalysis.filter(item => item.impact === 'positive');
+    const totalIngredients = ingredientAnalysis.length;
     
-    // Környezeti javítások
-    if (envScore > 60) {
-        recommendations.push({
-            type: 'environmental',
-            priority: 'high',
-            message: 'Cserélje le a magas környezeti hatású hozzávalókat növényi alternatívákra',
-            impact: '+15-25 pont'
-        });
+    if (positiveIngredients.length / totalIngredients < 0.5) {
+        recommendations.push('Növelje a zöldségek és növényi alapú hozzávalók arányát.');
     }
     
-    // Táplálkozási javítások
-    if (nutriScore < 60) {
-        recommendations.push({
-            type: 'nutritional',
-            priority: 'medium',
-            message: 'Adjon hozzá több zöldséget vagy teljes kiőrlésű gabonát',
-            impact: '+10-20 pont'
-        });
+    // Specifikus javaslatok
+    if (negativeIngredients.some(item => item.name.includes('marha'))) {
+        recommendations.push('A marhahús helyett próbáljon babot vagy lencsét használni.');
     }
     
-    // Általános javaslatok
-    if (sustainability < 70) {
-        recommendations.push({
-            type: 'general',
-            priority: 'low',
-            message: 'Válasszon helyi és szezonális alapanyagokat',
-            impact: '+5-10 pont'
-        });
+    if (negativeIngredients.some(item => item.name.includes('csirke'))) {
+        recommendations.push('A csirkehús helyett próbáljon tofut vagy tempeh-t használni.');
+    }
+    
+    // Ha már jó a recept
+    if (recommendations.length === 0) {
+        recommendations.push('Ez a recept már jó fenntarthatósági egyensúlyt mutat!');
     }
     
     return recommendations;
 }
 
 /**
- * Szezonalitás ellenőrzése
+ * Elemzési szöveg generálása
  * 
- * @param {string} ingredients - Hozzávalók
- * @param {number} month - Hónap (1-12)
- * @returns {Object} Szezonalitás információ
+ * @param {Array} ingredientAnalysis - Hozzávalók elemzése
+ * @param {number} overallScore - Összesített pontszám
+ * @returns {string} Elemzési szöveg
  */
-export function checkSeasonality(ingredients, month = new Date().getMonth() + 1) {
-    const seasonalIngredients = {
-        spring: [3, 4, 5], // március-május
-        summer: [6, 7, 8], // június-augusztus
-        autumn: [9, 10, 11], // szeptember-november
-        winter: [12, 1, 2]  // december-február
+function generateAnalysisText(ingredientAnalysis, overallScore) {
+    const positive = ingredientAnalysis.filter(item => item.impact === 'positive').length;
+    const negative = ingredientAnalysis.filter(item => item.impact === 'negative').length;
+    const total = ingredientAnalysis.length;
+    
+    let text = `Ez a recept ${overallScore.toFixed(1)}/100 fenntarthatósági pontot ért el. `;
+    
+    if (overallScore >= 80) {
+        text += 'Kiváló választás a környezet számára!';
+    } else if (overallScore >= 60) {
+        text += 'Jó fenntarthatósági profil, néhány javítási lehetőséggel.';
+    } else if (overallScore >= 40) {
+        text += 'Közepes fenntarthatóság, érdemes lehet módosításokat eszközölni.';
+    } else {
+        text += 'A fenntarthatóság javítható lenne néhány hozzávaló cseréjével.';
+    }
+    
+    text += ` A recept ${positive} környezetbarát és ${negative} magas környezeti hatású hozzávalót tartalmaz.`;
+    
+    return text;
+}
+
+/**
+ * Szezonális pontszám módosító
+ * 
+ * @param {string} ingredient - Hozzávaló
+ * @param {Date} date - Dátum (alapértelmezett: ma)
+ * @returns {number} Szezonális módosító (-2 - +2)
+ */
+export function getSeasonalModifier(ingredient, date = new Date()) {
+    const month = date.getMonth() + 1; // 1-12
+    const lowerIngredient = ingredient.toLowerCase();
+    
+    const seasonalData = {
+        // Tavaszi (március-május): 3,4,5
+        'spárga': { peak: [3, 4, 5], modifier: 2 },
+        'retek': { peak: [3, 4, 5], modifier: 1 },
+        'saláta': { peak: [3, 4, 5, 6], modifier: 1 },
+        
+        // Nyári (június-augusztus): 6,7,8  
+        'paradicsom': { peak: [6, 7, 8], modifier: 2 },
+        'paprika': { peak: [6, 7, 8], modifier: 2 },
+        'uborka': { peak: [6, 7, 8], modifier: 2 },
+        'cukkini': { peak: [6, 7, 8], modifier: 2 },
+        
+        // Őszi (szeptember-november): 9,10,11
+        'tök': { peak: [9, 10, 11], modifier: 2 },
+        'alma': { peak: [9, 10, 11], modifier: 2 },
+        'szőlő': { peak: [9, 10], modifier: 2 },
+        
+        // Téli (december-február): 12,1,2
+        'káposzta': { peak: [12, 1, 2], modifier: 2 },
+        'répa': { peak: [12, 1, 2], modifier: 1 },
+        'krumpli': { peak: [9, 10, 11, 12], modifier: 1 }
     };
     
-    const seasonalFoods = {
-        spring: ['spárga', 'retek', 'saláta', 'spenót', 'újhagyma'],
-        summer: ['paradicsom', 'paprika', 'uborka', 'cukkini', 'barack', 'szilva'],
-        autumn: ['tök', 'káposzta', 'alma', 'körte', 'szőlő', 'dió'],
-        winter: ['kelbimbó', 'karfiol', 'répa', 'krumpli', 'citrus']
-    };
-    
-    let currentSeason = 'spring';
-    for (const [season, months] of Object.entries(seasonalIngredients)) {
-        if (months.includes(month)) {
-            currentSeason = season;
-            break;
+    for (const [key, data] of Object.entries(seasonalData)) {
+        if (lowerIngredient.includes(key)) {
+            return data.peak.includes(month) ? data.modifier : -1;
         }
     }
     
-    const ingredientList = ingredients.toLowerCase().split(/[,\s]+/);
-    const seasonalMatches = seasonalFoods[currentSeason].filter(food => 
-        ingredientList.some(ingredient => ingredient.includes(food))
-    );
-    
-    return {
-        season: currentSeason,
-        seasonalIngredients: seasonalMatches,
-        seasonalityScore: seasonalMatches.length > 0 ? Math.min(100, seasonalMatches.length * 20) : 0,
-        recommendations: seasonalMatches.length === 0 ? 
-            [`Próbáljon ${currentSeason} szezonú alapanyagokat használni`] : []
-    };
+    return 0; // Semleges, ha nincs szezonális adat
 }
