@@ -57,7 +57,8 @@ function loadFallbackData() {
             category: "leves",
             env_score: 25.5,
             nutri_score: 78.2,
-            sustainability_index: 70
+            sustainability_index: 70,
+            instructions: "A hagymát apróra vágjuk és olajon megdinszteljük. Hozzáadjuk a paradicsomot és a fűszereket. 20 percig főzzük."
         },
         {
             recipeid: 2,
@@ -66,7 +67,8 @@ function loadFallbackData() {
             category: "főétel",
             env_score: 58.3,
             nutri_score: 65.1,
-            sustainability_index: 45
+            sustainability_index: 45,
+            instructions: "A csirkemellet megsütjük, a rizst megfőzzük. A zöldségeket párolunk és összekeverjük."
         },
         {
             recipeid: 3,
@@ -75,115 +77,305 @@ function loadFallbackData() {
             category: "saláta",
             env_score: 15.2,
             nutri_score: 72.8,
-            sustainability_index: 85
+            sustainability_index: 85,
+            instructions: "Az uborkát felszeleteljük, megsózzuk. A tejfölt összekeverjük a fűszerekkel."
         },
         {
             recipeid: 4,
             name: "Spenótos lasagne",
-            ingredients: "lasagne tészta, spenót, ricotta, mozzarella, paradicsom",
+            ingredients: "lasagne tészta, spenót, ricotta, mozzarella, paradicsom szósz, fokhagyma, hagyma",
             category: "főétel",
             env_score: 42.1,
-            nutri_score: 55.8,
-            sustainability_index: 62
+            nutri_score: 70.5,
+            sustainability_index: 62,
+            instructions: "A spenótot összekeverjük a ricottával. Rétegesen összerakjuk a tésztával és szósszal. 180°C-on 45 percig sütjük."
         },
         {
             recipeid: 5,
             name: "Gyümölcssaláta",
-            ingredients: "alma, banán, narancs, szőlő, méz, citromlé",
+            ingredients: "alma, banán, narancs, szőlő, citromlé, méz",
             category: "desszert",
-            env_score: 18.7,
+            env_score: 12.8,
             nutri_score: 85.3,
-            sustainability_index: 88
+            sustainability_index: 92,
+            instructions: "A gyümölcsöket felkockázzuk, citromlével lelocsoljuk. Mézzel édesítjük."
         },
         {
             recipeid: 6,
-            name: "Zöldségleves",
-            ingredients: "sárgarépa, zeller, burgonya, hagyma, petrezselyem",
-            category: "leves",
-            env_score: 20.4,
+            name: "Zöld smoothie",
+            ingredients: "spenót, banán, alma, gyömbér, víz, citromlé",
+            category: "ital",
+            env_score: 8.5,
+            nutri_score: 88.7,
+            sustainability_index: 95,
+            instructions: "Minden hozzávalót turmixgépbe teszünk és simára turmixoljuk."
+        },
+        {
+            recipeid: 7,
+            name: "Marhapörkölt",
+            ingredients: "marha, hagyma, paprika, paradicsom, só, bors, babérlevél",
+            category: "főétel",
+            env_score: 75.2,
+            nutri_score: 58.1,
+            sustainability_index: 25,
+            instructions: "A húst felkockázzuk, a hagymát megpirítjuk. Hozzáadjuk a húst és a fűszereket. 2 órán át pároljuk."
+        },
+        {
+            recipeid: 8,
+            name: "Vegán burger",
+            ingredients: "fekete bab, quinoa, hagyma, fokhagyma, petrezselyem, zabpehely, zsemlemorzsa",
+            category: "főétel",
+            env_score: 18.3,
             nutri_score: 76.9,
-            sustainability_index: 82
+            sustainability_index: 88,
+            instructions: "A babot összetörjük, összekeverjük a többi hozzávalóval. Pogácsákat formázunk és megsütjük."
         }
     ];
 }
 
 /**
- * Receptek előkészítése, érvénytelen adatok szűrése,
- * fenntarthatósági pontszámok újraszámítása
+ * Receptek előkészítése a használatra
  * 
- * @param {Array} recipes - Nyers recept adatok
+ * @param {Array} rawRecipes - Nyers recept adatok
  * @returns {Array} Előkészített receptek
  */
-export function prepareRecipes(recipes) {
-    console.log('🔧 Receptek előkészítése és fenntarthatóság újraszámítása...');
+export function prepareRecipes(rawRecipes) {
+    console.log('⚙️ Receptek előkészítése...');
     
-    let validRecipes = 0;
-    let filteredRecipes = [];
-    let recalculatedCount = 0;
-    
-    recipes.forEach((recipe, index) => {
-        // 1. ÉRVÉNYES RECEPTEK SZŰRÉSE
-        const envScore = recipe.env_score || 0;
-        const nutriScore = recipe.nutri_score || 0;
-        
-        // Lazábbak vagyunk a szűréssel - csak ha mindkettő 0
-        if (envScore <= 0 && nutriScore <= 0) {
-            console.log(`❌ Recept kihagyva (mindkét pontszám 0): ${recipe.name || 'Névtelen'}`);
-            return; // Kihagyjuk ezt a receptet
-        }
-        
-        // 2. FENNTARTHATÓSÁG ÚJRASZÁMÍTÁSA
-        const originalSustainability = recipe.sustainability_index || 0;
-        const calculatedSustainability = calculateSustainabilityScore(recipe);
-        
-        recipe.sustainability_index = calculatedSustainability;
-        recalculatedCount++;
-        
-        if (Math.abs(originalSustainability - calculatedSustainability) > 10) {
-            console.log(`🔄 Fenntarthatóság változás: ${recipe.name?.substring(0, 30)} - ${originalSustainability.toFixed(1)} → ${calculatedSustainability.toFixed(1)}`);
-        }
-        
-        // 3. KATEGÓRIA ÉS IKON HOZZÁADÁSA
-        if (!recipe.category) {
-            recipe.category = determineCategory(recipe);
-        }
-        
-        if (!recipe.categoryIcon) {
-            recipe.categoryIcon = getCategoryIcon(recipe.category);
-        }
-        
-        // 4. BIZTONSÁGOS ÉRTÉKEK
-        recipe.name = recipe.name || `Recept #${recipe.recipeid || index + 1}`;
-        recipe.ingredients = recipe.ingredients || 'Ismeretlen hozzávalók';
-        
-        // Érvényes recept hozzáadása
-        filteredRecipes.push(recipe);
-        validRecipes++;
-    });
-    
-    // Statisztikák
-    const categoryCounts = {};
-    filteredRecipes.forEach(recipe => {
-        const cat = recipe.category || 'egyéb';
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-    });
-    
-    console.log('✅ Előkészítés befejezve:');
-    console.log('   - Érvényes receptek:', validRecipes);
-    console.log('   - Újraszámított fenntarthatóság:', recalculatedCount);
-    console.log('   - Kategória megoszlás:', categoryCounts);
-    
-    // Fenntarthatóság statisztikák
-    if (filteredRecipes.length > 0) {
-        const avgSustainability = filteredRecipes.reduce((sum, r) => sum + (r.sustainability_index || 0), 0) / filteredRecipes.length;
-        const minSustainability = Math.min(...filteredRecipes.map(r => r.sustainability_index || 0));
-        const maxSustainability = Math.max(...filteredRecipes.map(r => r.sustainability_index || 0));
-        
-        console.log('📊 Fenntarthatóság statisztikák:');
-        console.log(`   - Átlag: ${avgSustainability.toFixed(1)}`);
-        console.log(`   - Min: ${minSustainability.toFixed(1)}`);
-        console.log(`   - Max: ${maxSustainability.toFixed(1)}`);
+    if (!Array.isArray(rawRecipes)) {
+        console.error('❌ Hibás recept adat formátum!');
+        return [];
     }
     
-    return filteredRecipes;
+    const preparedRecipes = rawRecipes.map(recipe => {
+        try {
+            return prepareRecipe(recipe);
+        } catch (error) {
+            console.warn(`⚠️ Recept előkészítési hiba (${recipe.recipeid}):`, error);
+            return null;
+        }
+    }).filter(recipe => recipe !== null);
+    
+    console.log('✅ Receptek előkészítve:', preparedRecipes.length, 'érvényes recept');
+    return preparedRecipes;
+}
+
+/**
+ * Egyetlen recept előkészítése
+ * 
+ * @param {Object} rawRecipe - Nyers recept adat
+ * @returns {Object} Előkészített recept
+ */
+function prepareRecipe(rawRecipe) {
+    // Alapértelmezett értékek beállítása
+    const recipe = {
+        recipeid: rawRecipe.recipeid || 0,
+        name: rawRecipe.name || 'Névtelen recept',
+        ingredients: rawRecipe.ingredients || '',
+        category: rawRecipe.category || 'egyéb',
+        env_score: parseFloat(rawRecipe.env_score) || 50,
+        nutri_score: parseFloat(rawRecipe.nutri_score) || 50,
+        sustainability_index: parseFloat(rawRecipe.sustainability_index) || 50,
+        instructions: rawRecipe.instructions || 'Nincs elérhető útmutató.'
+    };
+    
+    // Kategória normalizálása és ikon hozzáadása
+    recipe.category = normalizeCategory(recipe.category);
+    recipe.categoryIcon = getCategoryIcon(recipe.category);
+    
+    // Hiányzó fenntarthatósági pontszám számítása
+    if (!rawRecipe.sustainability_index && rawRecipe.env_score && rawRecipe.nutri_score) {
+        recipe.sustainability_index = calculateSustainabilityScore(
+            recipe.env_score, 
+            recipe.nutri_score, 
+            recipe.category
+        );
+    }
+    
+    // Validáció
+    validateRecipe(recipe);
+    
+    return recipe;
+}
+
+/**
+ * Kategória normalizálása
+ * 
+ * @param {string} category - Eredeti kategória
+ * @returns {string} Normalizált kategória
+ */
+function normalizeCategory(category) {
+    if (!category || typeof category !== 'string') {
+        return 'egyéb';
+    }
+    
+    const normalized = category.toLowerCase().trim();
+    
+    // Kategória mapping
+    const categoryMap = {
+        'soup': 'leves',
+        'salad': 'saláta',
+        'main': 'főétel',
+        'main_course': 'főétel',
+        'dessert': 'desszert',
+        'drink': 'ital',
+        'beverage': 'ital',
+        'breakfast': 'reggeli',
+        'side': 'köret',
+        'side_dish': 'köret',
+        'appetizer': 'előétel',
+        'snack': 'snack'
+    };
+    
+    return categoryMap[normalized] || normalized;
+}
+
+/**
+ * Recept validáció
+ * 
+ * @param {Object} recipe - Recept objektum
+ * @throws {Error} Validációs hiba esetén
+ */
+function validateRecipe(recipe) {
+    if (!recipe.recipeid || recipe.recipeid <= 0) {
+        throw new Error('Érvénytelen recept ID');
+    }
+    
+    if (!recipe.name || recipe.name.trim().length === 0) {
+        throw new Error('Hiányzó recept név');
+    }
+    
+    if (!recipe.ingredients || recipe.ingredients.trim().length === 0) {
+        throw new Error('Hiányzó hozzávalók');
+    }
+    
+    // Pontszámok ellenőrzése
+    if (recipe.env_score < 0 || recipe.env_score > 100) {
+        console.warn(`⚠️ Környezeti pontszám kívül esik a tartományon: ${recipe.env_score}`);
+        recipe.env_score = Math.max(0, Math.min(100, recipe.env_score));
+    }
+    
+    if (recipe.nutri_score < 0 || recipe.nutri_score > 100) {
+        console.warn(`⚠️ Táplálkozási pontszám kívül esik a tartományon: ${recipe.nutri_score}`);
+        recipe.nutri_score = Math.max(0, Math.min(100, recipe.nutri_score));
+    }
+    
+    if (recipe.sustainability_index < 0 || recipe.sustainability_index > 100) {
+        console.warn(`⚠️ Fenntarthatósági index kívül esik a tartományon: ${recipe.sustainability_index}`);
+        recipe.sustainability_index = Math.max(0, Math.min(100, recipe.sustainability_index));
+    }
+}
+
+/**
+ * Receptek szűrése kritériumok alapján
+ * 
+ * @param {Array} recipes - Receptek tömbje
+ * @param {Object} criteria - Szűrési kritériumok
+ * @returns {Array} Szűrt receptek
+ */
+export function filterRecipes(recipes, criteria = {}) {
+    if (!Array.isArray(recipes)) {
+        return [];
+    }
+    
+    return recipes.filter(recipe => {
+        // Kategória szűrés
+        if (criteria.category && recipe.category !== criteria.category) {
+            return false;
+        }
+        
+        // Fenntarthatósági minimum
+        if (criteria.minSustainability && recipe.sustainability_index < criteria.minSustainability) {
+            return false;
+        }
+        
+        // Környezeti maximum
+        if (criteria.maxEnvScore && recipe.env_score > criteria.maxEnvScore) {
+            return false;
+        }
+        
+        // Táplálkozási minimum
+        if (criteria.minNutriScore && recipe.nutri_score < criteria.minNutriScore) {
+            return false;
+        }
+        
+        // Hozzávaló kizárás
+        if (criteria.excludeIngredients && Array.isArray(criteria.excludeIngredients)) {
+            const ingredients = recipe.ingredients.toLowerCase();
+            for (const excluded of criteria.excludeIngredients) {
+                if (ingredients.includes(excluded.toLowerCase())) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    });
+}
+
+/**
+ * Receptek csoportosítása kategória szerint
+ * 
+ * @param {Array} recipes - Receptek tömbje
+ * @returns {Object} Kategóriánként csoportosított receptek
+ */
+export function groupRecipesByCategory(recipes) {
+    if (!Array.isArray(recipes)) {
+        return {};
+    }
+    
+    const grouped = {};
+    
+    recipes.forEach(recipe => {
+        const category = recipe.category || 'egyéb';
+        if (!grouped[category]) {
+            grouped[category] = [];
+        }
+        grouped[category].push(recipe);
+    });
+    
+    return grouped;
+}
+
+/**
+ * Recept statisztikák számítása
+ * 
+ * @param {Array} recipes - Receptek tömbje
+ * @returns {Object} Statisztikai adatok
+ */
+export function calculateRecipeStats(recipes) {
+    if (!Array.isArray(recipes) || recipes.length === 0) {
+        return {
+            total: 0,
+            avgSustainability: 0,
+            avgEnvScore: 0,
+            avgNutriScore: 0,
+            categoryDistribution: {}
+        };
+    }
+    
+    const total = recipes.length;
+    
+    const avgSustainability = recipes.reduce((sum, recipe) => 
+        sum + (recipe.sustainability_index || 0), 0) / total;
+    
+    const avgEnvScore = recipes.reduce((sum, recipe) => 
+        sum + (recipe.env_score || 0), 0) / total;
+    
+    const avgNutriScore = recipes.reduce((sum, recipe) => 
+        sum + (recipe.nutri_score || 0), 0) / total;
+    
+    const categoryDistribution = {};
+    recipes.forEach(recipe => {
+        const category = recipe.category || 'egyéb';
+        categoryDistribution[category] = (categoryDistribution[category] || 0) + 1;
+    });
+    
+    return {
+        total,
+        avgSustainability: Math.round(avgSustainability * 10) / 10,
+        avgEnvScore: Math.round(avgEnvScore * 10) / 10,
+        avgNutriScore: Math.round(avgNutriScore * 10) / 10,
+        categoryDistribution
+    };
 }
