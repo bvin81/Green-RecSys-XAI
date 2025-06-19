@@ -9,7 +9,7 @@ const CONFIG = {
     APP_NAME: 'Eco-Score Recept Kutató Rendszer',
     VERSION: '2025.06.20',
     
-    // Adatforrás
+    // ✅ KRITIKUS: Adatforrás beállítása
     DATA_SOURCE: './data/recipes_hungarian_best1000.json',
     
     // A/B/C teszt csoportok
@@ -141,5 +141,12 @@ const CONFIG = {
         TRACK_XAI_INTERACTIONS: true
     }
 };
+
+// ✅ DEBUG: CONFIG tartalom ellenőrzése
+console.log('🔧 CONFIG betöltve:', {
+    DATA_SOURCE: CONFIG.DATA_SOURCE,
+    hasDataSource: !!CONFIG.DATA_SOURCE,
+    configKeys: Object.keys(CONFIG)
+});
 
 export default CONFIG;
