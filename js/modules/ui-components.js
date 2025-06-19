@@ -611,7 +611,7 @@ export function generateSelectionConfirmation(recipe, decisionTime) {
     message += `\n\n✅ A választás sikeresen rögzítve a kutatáshoz!`;
     
     return message;
-})}/100</strong></li>
+}/100</strong></li>
                 </ul>
                 
                 <div class="xai-summary">
