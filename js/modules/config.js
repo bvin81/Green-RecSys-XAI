@@ -88,7 +88,7 @@ const CONFIG = {
         USE_REAL_API: true,
         
         // ✅ Alapértelmezett értékek - dinamikusan frissülnek
-        OPENAI_API_KEY: 'sk-...ExEA',
+        OPENAI_API_KEY: null,
         PROVIDER: 'openai',
         DEBUG: false,
         
