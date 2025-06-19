@@ -90,29 +90,30 @@ const CONFIG = {
     XAI: {
         USE_REAL_API: true,
         
-        // ✅ HELYES - GitHub Actions környezeti változókból olvas
-        get OPENAI_API_KEY() {
-            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_OPENAI_API_KEY) 
-                ? window.ENV.VITE_OPENAI_API_KEY 
-                : null;
-        },
-        
-        // ✅ Alternatív környezeti változó nevek
-        get PROVIDER() {
-            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_XAI_PROVIDER) 
-                ? window.ENV.VITE_XAI_PROVIDER 
-                : 'openai';
-        },
-        
-        get DEBUG() {
-            return (typeof window !== 'undefined' && window.ENV && window.ENV.VITE_XAI_DEBUG) 
-                ? window.ENV.VITE_XAI_DEBUG === 'true' 
-                : false;
-        },
+        // ✅ Alapértelmezett értékek - dinamikusan frissülnek
+        OPENAI_API_KEY: null,
+        PROVIDER: 'openai',
+        DEBUG: false,
         
         // ✅ Fallback beállítások
         FALLBACK_ON_ERROR: true,
-        CACHE_RESULTS: true
+        CACHE_RESULTS: true,
+        
+        // ✅ Inicializálási függvény
+        init() {
+            if (typeof window !== 'undefined' && window.ENV) {
+                this.OPENAI_API_KEY = window.ENV.VITE_OPENAI_API_KEY || null;
+                this.PROVIDER = window.ENV.VITE_XAI_PROVIDER || 'openai';
+                this.DEBUG = window.ENV.VITE_XAI_DEBUG === 'true';
+                console.log('🔧 XAI konfiguráció inicializálva:', {
+                    hasApiKey: !!this.OPENAI_API_KEY,
+                    provider: this.PROVIDER,
+                    debug: this.DEBUG
+                });
+            } else {
+                console.warn('⚠️ window.ENV nem elérhető, alapértelmezett értékek használata');
+            }
+        }
     },
     
     // Kategória ikonok
