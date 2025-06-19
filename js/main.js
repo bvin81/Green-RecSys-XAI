@@ -47,6 +47,11 @@ class EcoScoreRecipeApp {
         console.log(`🚀 ${CONFIG.APP_NAME} - ${CONFIG.VERSION} verzió indítása...`);
         
         try {
+            // ✅ CONFIG inicializálása a környezeti változókkal
+            if (CONFIG.XAI && typeof CONFIG.XAI.init === 'function') {
+                CONFIG.XAI.init();
+            }
+            
             // Adatok betöltése
             const rawData = await loadRecipeData();
             this.recipes = prepareRecipes(rawData);
@@ -261,81 +266,60 @@ class EcoScoreRecipeApp {
     selectRecipe(recipeId, recipeName, rank, searchIngredients, source = 'search') {
         try {
             // Döntési idő számítása
-            const decisionTime = this.searchStartTime ? (Date.now() - this.searchStartTime) / 1000 : 0;
+            const decisionTime = this.searchStartTime ? 
+                Math.round((Date.now() - this.searchStartTime) / 1000) : 0;
             
-            // Kiválasztott recept megkeresése
-            const selectedRecipe = this.recipes.find(r => r.recipeid == recipeId);
-            
-            if (!selectedRecipe) {
-                throw new Error('Kiválasztott recept nem található');
+            // Recept objektum keresése
+            const recipe = this.recipes.find(r => r.recipeid == recipeId);
+            if (!recipe) {
+                throw new Error('A recept nem található');
             }
             
             // Választás rögzítése
-            recordUserChoice(
+            const choiceData = recordUserChoice(
                 this.currentUser, 
-                selectedRecipe, 
+                recipe, 
                 rank, 
                 searchIngredients, 
                 decisionTime,
                 source
             );
             
-            // Modál ablak bezárása, ha nyitva van
-            this.closeModal();
-            
-            // Visszaigazolás megjelenítése
-            alert(generateSelectionConfirmation(selectedRecipe, decisionTime));
-            
-            // UI átváltás
+            // Köszönőoldal megjelenítése
             this.showSection('thank-you-section');
+            
+            console.log('✅ Recept kiválasztva:', recipeName);
             
         } catch (error) {
             console.error('❌ Recept kiválasztási hiba:', error);
-            alert('Hiba történt a recept kiválasztása során. Kérjük, próbálja újra!');
+            alert('Hiba történt a recept kiválasztása során.');
         }
     }
     
     /**
-     * Recept részletek megtekintése
+     * Recept részletek megjelenítése modális ablakban
      * 
      * @param {number} recipeId - Recept azonosító
      */
-    viewRecipeDetails(recipeId) {
+    showRecipeDetails(recipeId) {
         try {
-            // Recept megkeresése
             const recipe = this.recipes.find(r => r.recipeid == recipeId);
-            
             if (!recipe) {
-                throw new Error('Recept nem található');
+                throw new Error('A recept nem található');
             }
             
             this.currentRecipeDetails = recipe;
             
-            // Modális ablak létrehozása
             const modalContainer = document.getElementById('modal-container');
             if (!modalContainer) {
                 throw new Error('Modális konténer nem található');
             }
             
-            // Modális HTML generálása
             modalContainer.innerHTML = generateRecipeDetailsModal(recipe, this.testGroup);
-            
-            // Modális ablak megjelenítése
             modalContainer.classList.add('active');
             
-            // Ha C csoport, XAI magyarázat betöltése
-            if (this.testGroup === 'C') {
-                setTimeout(async () => {
-                    const detailXaiContainer = document.getElementById(`xai-container-detail-${recipe.recipeid}`);
-                    if (detailXaiContainer) {
-                        detailXaiContainer.innerHTML = await generateAndDisplayXAI(recipe);
-                    }
-                }, 100);
-            }
-            
         } catch (error) {
-            console.error('❌ Recept részletek hiba:', error);
-            alert('Hiba történt a recept részletek megjelenítése során.');
+            console.error('❌ Recept részletek megjelenítési hiba:', error);
         }
     }
     
@@ -454,10 +438,15 @@ let app;
 document.addEventListener('DOMContentLoaded', () => {
     try {
         console.log(`🌟 ${CONFIG.APP_NAME} indítása...`);
-        app = new EcoScoreRecipeApp();
         
-        // Globális elérhetőség a window objektumon keresztül
-        window.app = app;
+        // Kis késleltetés, hogy biztosan betöltődjön a window.ENV
+        setTimeout(() => {
+            app = new EcoScoreRecipeApp();
+            
+            // Globális elérhetőség a window objektumon keresztül
+            window.app = app;
+        }, 100);
+        
     } catch (error) {
         console.error('❌ Alkalmazás indítási hiba:', error);
         alert('Az alkalmazás indítása sikertelen. Kérjük, töltse újra az oldalt.');
